@@ -1,0 +1,18 @@
+{
+  "name": "boss-zhipin-scraper",
+  "version": "1.0.0",
+  "description": "BOSS直聘岗位信息爬虫 — 通过API自动获取岗位列表与详细描述",
+  "main": "src/scraper.js",
+  "scripts": {
+    "start": "node src/scraper.js",
+    "server": "node src/token-server.js"
+  },
+  "keywords": ["boss-zhipin", "scraper", "jobs"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.61.0",
+    "@types/node": "^25.9.3"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+tests/
+*/data/config.json
+*/data/jobs.json
+.github/
+
+playwright.config.ts
+
+/debug-*
