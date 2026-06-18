@@ -14,6 +14,11 @@
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [{
+    "matches": ["https://www.zhipin.com/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }],
   "action": {
     "default_title": "BOSS直聘 Token 捕获器",
     "default_popup": "popup.html"

@@ -5,11 +5,14 @@ const TARGET_PATHS = [
   '/wapi/zpgeek/job/detail.json',
 ];
 const SERVER_URL = 'http://127.0.0.1:8892/update-token';
+const SETTINGS_URL = 'http://127.0.0.1:8892/update-settings';
+const CRAWL_URL = 'http://127.0.0.1:8892/start-crawl';
+const STOP_CRAWL_URL = 'http://127.0.0.1:8892/stop-crawl';
 
 let lastTokens = { cookie: '', zp_token: '', token: '' };
 
 // ============================================================
-// Token 捕获（与之前一致）
+// Token 捕获
 // ============================================================
 function captureHeaders(details) {
   const url = details.url;
@@ -47,12 +50,142 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
 );
 
 // ============================================================
-// 页面保活刷新（替代 Tampermonkey）
-// 每 10 秒刷新一次 zhipin 页面，保持 token 新鲜
-// 使用整页刷新而非静默 API 请求，绕过 WAF 检测
+// 捕获搜索请求参数（用于保存筛选条件）
+// ============================================================
+let lastSearchParams = null;
+
+chrome.storage.local.get('lastSearchParams', (data) => {
+  if (data.lastSearchParams) lastSearchParams = data.lastSearchParams;
+});
+
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    if (!details.url.includes('/wapi/zpgeek/search/joblist.json')) return;
+
+    let params = null;
+    if (details.requestBody && details.requestBody.formData) {
+      params = {};
+      for (const [key, vals] of Object.entries(details.requestBody.formData)) {
+        params[key] = vals[0];
+      }
+    }
+    if (!params && details.requestBody && details.requestBody.raw) {
+      const enc = new TextDecoder('utf-8');
+      let raw = '';
+      for (const chunk of details.requestBody.raw) {
+        raw += enc.decode(chunk.bytes);
+      }
+      if (raw) {
+        params = Object.fromEntries(new URLSearchParams(raw));
+      }
+    }
+    if (!params) {
+      const qIdx = details.url.indexOf('?');
+      if (qIdx !== -1) {
+        params = Object.fromEntries(new URLSearchParams(details.url.slice(qIdx)));
+      }
+    }
+
+    if (params) {
+      lastSearchParams = params;
+      chrome.storage.local.set({ lastSearchParams });
+    }
+  },
+  { urls: ['https://www.zhipin.com/*'] },
+  ['requestBody']
+);
+
+// ============================================================
+// 消息路由（接收 content.js 指令）
 // ============================================================
 const REFRESH_INTERVAL_MS = 10000;
 let refreshTabId = null;
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  switch (msg.command) {
+    case 'saveSearchParams':
+      saveSearchParams(msg.urlParams).then((r) => sendResponse(r));
+      return true;
+
+    case 'startCrawl':
+      startCrawl().then((r) => sendResponse(r));
+      return true;
+
+    case 'stopCrawl':
+      stopCrawl().then((r) => sendResponse(r));
+      return true;
+
+    default:
+      sendResponse({ ok: false, error: 'unknown command' });
+  }
+});
+
+// ============================================================
+// 保存搜索条件
+// ============================================================
+async function saveSearchParams(urlParams) {
+  const params = lastSearchParams || urlParams;
+  if (!params || Object.keys(params).length === 0) {
+    return { ok: false, error: '请先在BOSS页面执行一次搜索，再点击保存' };
+  }
+
+  try {
+    const resp = await fetch(SETTINGS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiParams: params }),
+    });
+    return await resp.json();
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// ============================================================
+// 开始爬取 → 启动页面刷新 + 通知爬虫
+// ============================================================
+async function startCrawl() {
+  try {
+    // 先启动页面保活刷新（确保 token 新鲜）
+    startRefresh();
+    // 再通知爬虫开始
+    const resp = await fetch(CRAWL_URL);
+    const data = await resp.json();
+    return data;
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// ============================================================
+// 暂停爬取 → 停止页面刷新 + 通知爬虫停止
+// ============================================================
+async function stopCrawl() {
+  try {
+    // 停止页面刷新
+    stopRefresh();
+    // 通知爬虫停止
+    const resp = await fetch(STOP_CRAWL_URL);
+    const data = await resp.json();
+    return data;
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// ============================================================
+// 页面保活刷新
+// ============================================================
+function startRefresh() {
+  chrome.alarms.create('refresh-zhipin', {
+    periodInMinutes: REFRESH_INTERVAL_MS / 60000,
+  });
+}
+
+function stopRefresh() {
+  chrome.alarms.clear('refresh-zhipin');
+  refreshTabId = null;
+}
 
 async function refreshZhipin() {
   try {
@@ -61,7 +194,6 @@ async function refreshZhipin() {
       return;
     }
   } catch (_) {
-    // 标签页已关闭，重新创建
     refreshTabId = null;
   }
 
@@ -71,15 +203,8 @@ async function refreshZhipin() {
       active: false,
     });
     refreshTabId = tab.id;
-  } catch (_) {
-    // 静默失败
-  }
+  } catch (_) {}
 }
-
-// 启动定时刷新
-chrome.alarms.create('refresh-zhipin', {
-  periodInMinutes: REFRESH_INTERVAL_MS / 60000,
-});
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'refresh-zhipin') {
@@ -87,4 +212,4 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-console.log('[TokenCapturer] 已启动（捕获 + 每10s页面保活）');
+console.log('[TokenCapturer] 已启动（等待开始指令）');
