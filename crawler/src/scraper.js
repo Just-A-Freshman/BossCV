@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const { execSync } = require('child_process');
 
 // ============================================================
 // 配置区（优先级：settings.json > 内置默认值）
@@ -174,6 +175,19 @@ let crawlRequested = false;
 let stopRequested = false;
 let poolSaved = true; // 追踪 pool 是否需写入
 
+// 爬取进度状态（供前端轮询）
+let crawlProgress = {
+  phase: 'idle',          // idle | searching | fetching_details | completed | paused
+  totalPages: 0,
+  currentPage: 0,
+  totalJobs: 0,
+  poolHits: 0,
+  detailsTotal: 0,
+  detailsCompleted: 0,
+  currentJob: '',
+  retryInfo: '',
+};
+
 function startTokenServer() {
   const server = http.createServer((req, res) => {
     // 去掉 query string 做路由匹配，支持客户端缓存清除参数
@@ -319,8 +333,17 @@ function startTokenServer() {
       const dir = path.join(PROJECTS_DIR, id);
       console.log(`[删除] 目录路径: ${dir}, 存在=${fs.existsSync(dir)}`);
       if (fs.existsSync(dir)) {
-        fs.rmSync(dir, { recursive: true, force: true });
-        console.log(`[删除] 目录已删除`);
+        try {
+          // Windows + Node.js 下 fs.rmSync 对中文路径静默失效，用系统命令
+          if (process.platform === 'win32') {
+            execSync(`rmdir /s /q "${dir}"`, { stdio: 'pipe' });
+          } else {
+            execSync(`rm -rf "${dir}"`, { stdio: 'pipe' });
+          }
+          console.log(`[删除] 目录已删除`);
+        } catch (e) {
+          console.log(`[删除] 删除目录失败: ${e.message}`);
+        }
       }
       const before = loadProjectIndex();
       console.log(`[删除] 删除前索引条目数: ${before.length}`);
@@ -335,6 +358,11 @@ function startTokenServer() {
 
     if (pathname === '/pool/stats') {
       res.end(JSON.stringify({ totalJobs: Object.keys(jobPool).length }));
+      return;
+    }
+
+    if (pathname === '/progress') {
+      res.end(JSON.stringify(crawlProgress));
       return;
     }
 
@@ -450,11 +478,12 @@ async function getJobDetailWithRetry(securityId, lid, label) {
     if (attempt < CONFIG.retryMax) {
       // 递增延迟 + 随机抖动 (±25%)，避免与 WAF 速率窗口同步
       const wait = Math.round(CONFIG.retryDelay * attempt * (0.75 + Math.random() * 0.5));
+      crawlProgress.retryInfo = `第${attempt}次失败, ${(wait / 1000).toFixed(1)}s 后重试...`;
       console.log(`    (第${attempt}次失败, ${wait / 1000}s 后重试...)`);
       await sleep(wait);
     }
   }
-  console.log(`    (重试${CONFIG.retryMax}次均失败，跳过)`);
+  crawlProgress.retryInfo = `重试${CONFIG.retryMax}次均失败，跳过`;
   return null;
 }
 
@@ -569,6 +598,9 @@ async function runCrawl() {
   const projProgressFile = projDir ? path.join(projDir, 'progress.json') : CONFIG.progressFile;
   const projOutputFile  = projDir ? path.join(projDir, 'output.json')  : CONFIG.outputFile;
 
+  // 重置进度状态
+  crawlProgress = { phase: 'searching', totalPages: CONFIG.maxPages, currentPage: 0, totalJobs: 0, poolHits: 0, detailsTotal: 0, detailsCompleted: 0, currentJob: '', retryInfo: '' };
+
   // 读取已有进度
   let progress = { completedIds: [], allJobs: [] };
   if (fs.existsSync(projProgressFile)) {
@@ -581,11 +613,13 @@ async function runCrawl() {
     let newJobs = [];
     for (let page = 1; page <= CONFIG.maxPages; page++) {
       if (stopRequested) break;
+      crawlProgress.currentPage = page;
       console.log(`[搜索] 第${page}页...`);
       try {
         const result = await searchJobs(page);
         if (result.jobs.length === 0) { console.log('  无更多数据'); break; }
         newJobs = newJobs.concat(result.jobs);
+        crawlProgress.totalJobs = newJobs.length;
         console.log(`  +${result.jobs.length} 个（累计 ${newJobs.length}）`);
         if (!result.hasMore) { console.log('  已到最后一页'); break; }
         await sleep(CONFIG.delayBetweenPages);
@@ -593,6 +627,9 @@ async function runCrawl() {
     }
     progress.allJobs = newJobs;
   } else {
+    crawlProgress.totalJobs = progress.allJobs.length;
+    crawlProgress.detailsTotal = progress.allJobs.length;
+    crawlProgress.detailsCompleted = progress.completedIds.length;
     console.log(`[进度] 续爬 ${progress.allJobs.length} 个岗位, 已完成 ${progress.completedIds.length} 个详情\n`);
   }
 
@@ -606,11 +643,15 @@ async function runCrawl() {
       poolHits++;
     }
   }
+  crawlProgress.poolHits = poolHits;
   if (poolHits > 0) console.log(`[池] 命中 ${poolHits} 个岗位，跳过 API 请求`);
   savePoolProgress(progress, projProgressFile);
 
   // ── 第2阶段: 获取剩余详情 ──
   const stillPending = progress.allJobs.filter(j => j.encryptJobId && !progress.completedIds.includes(j.encryptJobId));
+  crawlProgress.phase = 'fetching_details';
+  crawlProgress.detailsTotal = progress.allJobs.length;
+  crawlProgress.detailsCompleted = progress.completedIds.length;
   console.log(`[详情] 待获取 ${stillPending.length} 个岗位\n`);
 
   let poolDirty = false;
@@ -626,6 +667,8 @@ async function runCrawl() {
       continue;
     }
     const label = `${item.jobName} @ ${item.brandName || ''}`;
+    crawlProgress.currentJob = label;
+    crawlProgress.retryInfo = '';
     process.stdout.write(`  [${i + 1}/${stillPending.length}] ${label} ...`);
     const detail = await getJobDetailWithRetry(sid, lid, label);
 
@@ -640,6 +683,7 @@ async function runCrawl() {
     }
 
     progress.completedIds.push(item.encryptJobId);
+    crawlProgress.detailsCompleted = progress.completedIds.length;
     savePoolProgress(progress, projProgressFile);
 
     // 每 20 个新岗位写一次 pool
@@ -652,6 +696,10 @@ async function runCrawl() {
 
   // ── 第3阶段: 输出 ──
   if (!stopRequested) {
+    crawlProgress.phase = 'completed';
+    crawlProgress.detailsCompleted = progress.completedIds.length;
+    crawlProgress.currentJob = '';
+    crawlProgress.retryInfo = '';
     const outputData = {
       config: {
         query: CONFIG.apiParams.query, city: CONFIG.apiParams.city,
@@ -674,6 +722,8 @@ async function runCrawl() {
       if (p) { p.status = 'completed'; p.totalJobs = outputData.total; p.completedDetails = outputData.completedDetails; saveProjectIndex(idx); }
     }
   } else {
+    crawlProgress.phase = 'paused';
+    crawlProgress.currentJob = '';
     // 更新项目索引 — 暂停
     if (currentProjectId) {
       const idx = loadProjectIndex();

@@ -12,8 +12,10 @@ const PROJECT_API = 'http://127.0.0.1:8892/projects';
 
 let lastTokens = { cookie: '', zp_token: '', token: '' };
 
-// 清除上次会话残留的刷新定时器，避免浏览器重启后自动打开BOSS页面
-chrome.alarms.clear('refresh-zhipin');
+// 清除上次会话残留的刷新定时器（仅在浏览器启动/插件更新时执行）
+// 不能用顶层 clear()，否则 SW 每次重启都会杀正在爬取的保活刷新
+chrome.runtime.onStartup.addListener(() => chrome.alarms.clear('refresh-zhipin'));
+chrome.runtime.onInstalled.addListener(() => chrome.alarms.clear('refresh-zhipin'));
 
 // ============================================================
 // Token 捕获
@@ -102,7 +104,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 // ============================================================
 // 消息路由（接收 content.js 指令）
 // ============================================================
-const REFRESH_INTERVAL_MS = 10000;
+const REFRESH_INTERVAL_MS = 2000;
 let refreshTabId = null;
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

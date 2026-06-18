@@ -50,6 +50,11 @@
       #boss-scraper-panel .ps-status.done { color: #1677ff; }
       #boss-scraper-panel .ps-new-project { display: none; flex-direction: column; gap: 6px; }
       #boss-scraper-panel .ps-params { font-size: 12px; color: #666; background: #f5f5f5; border-radius: 4px; padding: 6px 8px; line-height: 1.5; }
+      #boss-scraper-panel .ps-progress { display: none; flex-direction: column; gap: 4px; }
+      #boss-scraper-panel .ps-progress-bar { height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
+      #boss-scraper-panel .ps-progress-fill { height: 100%; background: #52c41a; border-radius: 3px; transition: width .3s ease; width: 0%; }
+      #boss-scraper-panel .ps-progress-text { font-size: 12px; color: #666; line-height: 1.4; }
+      #boss-scraper-panel .ps-progress-detail { font-size: 11px; color: #999; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     </style>
     <div class="ps-wrap">
       <div class="ps-title">
@@ -72,8 +77,13 @@
           <button class="ps-btn ps-btn-default" id="ps-btn-cancel-new">取消</button>
         </div>
       </div>
-      <!-- 状态 & 操作 -->
+      <!-- 状态 & 进度 -->
       <div class="ps-status idle" id="ps-status">待机中</div>
+      <div class="ps-progress" id="ps-progress">
+        <div class="ps-progress-bar"><div class="ps-progress-fill" id="ps-progress-fill"></div></div>
+        <div class="ps-progress-text" id="ps-progress-text"></div>
+        <div class="ps-progress-detail" id="ps-progress-detail"></div>
+      </div>
       <div class="ps-row" id="ps-actions-idle" style="display:none">
         <button class="ps-btn ps-btn-primary ps-grow" id="ps-btn-start">开始爬取</button>
       </div>
@@ -96,6 +106,10 @@
   const doneActions = panel.querySelector('#ps-actions-done');
   const newProjectForm = panel.querySelector('#ps-new-project');
   const paramsDisplay = panel.querySelector('#ps-params-display');
+  const progressEl = panel.querySelector('#ps-progress');
+  const progressFill = panel.querySelector('#ps-progress-fill');
+  const progressText = panel.querySelector('#ps-progress-text');
+  const progressDetail = panel.querySelector('#ps-progress-detail');
   const startBtn = panel.querySelector('#ps-btn-start');
   const stopBtn = panel.querySelector('#ps-btn-stop');
   const delBtn = panel.querySelector('#ps-btn-del');
@@ -141,6 +155,7 @@
   function updateUI() {
     const proj = projects.find(p => p.id === (sel.value || currentProjectId));
     if (!proj) {
+      progressEl.style.display = 'none';
       statusEl.textContent = '待机中';
       statusEl.className = 'ps-status idle';
       projectRow.style.display = '';
@@ -162,11 +177,13 @@
     } else if (proj.status === 'completed' && proj.totalJobs > 0) {
       statusEl.textContent = '完成 ' + proj.completedDetails + '/' + proj.totalJobs + ' 岗';
       statusEl.className = 'ps-status done';
+      progressEl.style.display = 'none';
       projectRow.style.display = '';
       idleActions.style.display = 'none';
       crawlingActions.style.display = 'none';
       doneActions.style.display = '';
     } else {
+      progressEl.style.display = 'none';
       statusEl.textContent = '待机中';
       statusEl.className = 'ps-status idle';
       projectRow.style.display = '';
@@ -175,6 +192,28 @@
       doneActions.style.display = 'none';
     }
     newProjectForm.style.display = 'none';
+  }
+
+  function updateProgress(data) {
+    if (!data || data.phase === 'idle' || data.phase === 'paused' || data.phase === 'completed') {
+      progressEl.style.display = 'none';
+      return;
+    }
+    progressEl.style.display = 'flex';
+    if (data.phase === 'searching') {
+      const pct = data.totalPages > 0 ? Math.round((data.currentPage / data.totalPages) * 100) : 0;
+      progressFill.style.width = pct + '%';
+      progressText.textContent = '搜索中... 第 ' + data.currentPage + '/' + data.totalPages + ' 页 | 已找到 ' + data.totalJobs + ' 个岗位';
+      progressDetail.textContent = '';
+    } else if (data.phase === 'fetching_details') {
+      const pct = data.detailsTotal > 0 ? Math.round((data.detailsCompleted / data.detailsTotal) * 100) : 0;
+      progressFill.style.width = pct + '%';
+      progressText.textContent = '获取详情中... ' + data.detailsCompleted + '/' + data.detailsTotal;
+      var parts = [];
+      if (data.currentJob) parts.push(data.currentJob);
+      if (data.retryInfo) parts.push(data.retryInfo);
+      progressDetail.textContent = parts.join(' | ');
+    }
   }
 
   // ---- 从 background 获取捕获的搜索参数 ----
@@ -355,10 +394,13 @@
     });
   });
 
-  // ---- 轮询状态 ----
+  // ---- 轮询状态 + 进度 ----
   setInterval(() => {
     const proj = projects.find(p => p.id === (sel.value || currentProjectId));
-    if (proj && proj.status === 'running') loadProjects();
+    if (proj && proj.status === 'running') {
+      loadProjects();
+      fetch(API + '/progress?_=' + Date.now()).then(function(r) { return r.json(); }).then(function(d) { updateProgress(d); }).catch(function() {});
+    }
   }, 3000);
 
   loadProjects();
