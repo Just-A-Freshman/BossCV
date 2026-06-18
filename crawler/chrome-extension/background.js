@@ -8,8 +8,12 @@ const SERVER_URL = 'http://127.0.0.1:8892/update-token';
 const SETTINGS_URL = 'http://127.0.0.1:8892/update-settings';
 const CRAWL_URL = 'http://127.0.0.1:8892/start-crawl';
 const STOP_CRAWL_URL = 'http://127.0.0.1:8892/stop-crawl';
+const PROJECT_API = 'http://127.0.0.1:8892/projects';
 
 let lastTokens = { cookie: '', zp_token: '', token: '' };
+
+// 清除上次会话残留的刷新定时器，避免浏览器重启后自动打开BOSS页面
+chrome.alarms.clear('refresh-zhipin');
 
 // ============================================================
 // Token 捕获
@@ -115,6 +119,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       stopCrawl().then((r) => sendResponse(r));
       return true;
 
+    case 'startProject':
+      startProject(msg.projectId).then((r) => sendResponse(r));
+      return true;
+
+    case 'getSearchParams':
+      sendResponse({ params: lastSearchParams || null });
+      break;
+
     default:
       sendResponse({ ok: false, error: 'unknown command' });
   }
@@ -158,19 +170,30 @@ async function startCrawl() {
 }
 
 // ============================================================
-// 暂停爬取 → 停止页面刷新 + 通知爬虫停止
+// 开始项目爬取 → 启动页面刷新 + 通知爬虫
 // ============================================================
-async function stopCrawl() {
+async function startProject(projectId) {
   try {
-    // 停止页面刷新
-    stopRefresh();
-    // 通知爬虫停止
-    const resp = await fetch(STOP_CRAWL_URL);
+    startRefresh();
+    const resp = await fetch(PROJECT_API + '/' + projectId + '/start', { method: 'POST' });
     const data = await resp.json();
     return data;
   } catch (e) {
     return { ok: false, error: e.message };
   }
+}
+
+// ============================================================
+// 暂停爬取 → 停止页面刷新 + 通知爬虫停止
+// ============================================================
+async function stopCrawl() {
+  // 无论如何先停掉页面刷新
+  stopRefresh();
+  // 通知爬虫停止（连不上也返回成功，至少刷新停了）
+  try {
+    await fetch(STOP_CRAWL_URL);
+  } catch (_) {}
+  return { ok: true };
 }
 
 // ============================================================
