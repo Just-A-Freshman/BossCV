@@ -54,7 +54,12 @@ function loadConfig() {
   return result;
 }
 
-const CONFIG = loadConfig();
+function reloadConfig() {
+  Object.assign(CONFIG, loadConfig());
+  console.log(`[配置] 已重载: query="${CONFIG.apiParams.query}", city=${CONFIG.apiParams.city}`);
+}
+
+let CONFIG = loadConfig();
 
 // ============================================================
 // HTTP 工具
@@ -112,6 +117,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // ============================================================
 let tokenReady = false;
 let lastTokens = { cookie: '', zp_token: '', token: '' };
+let crawlRequested = false;
+let stopRequested = false;
 
 function startTokenServer() {
   const server = http.createServer((req, res) => {
@@ -141,6 +148,48 @@ function startTokenServer() {
       });
       return;
     }
+
+    if (req.method === 'POST' && req.url === '/update-settings') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          if (!data.apiParams) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ ok: false, error: '缺少 apiParams' }));
+            return;
+          }
+          let existing = {};
+          if (fs.existsSync(SETTINGS_FILE)) {
+            existing = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
+          }
+          const updated = { ...existing, apiParams: { ...existing.apiParams, ...data.apiParams } };
+          fs.writeFileSync(SETTINGS_FILE, JSON.stringify(updated, null, 2), 'utf-8');
+          reloadConfig();
+          res.end(JSON.stringify({ ok: true }));
+        } catch (e) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+      });
+      return;
+    }
+
+    if (req.url === '/start-crawl') {
+      stopRequested = false;
+      crawlRequested = true;
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.url === '/stop-crawl') {
+      stopRequested = true;
+      crawlRequested = false;
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
     res.writeHead(404);
     res.end('not found');
   });
@@ -166,6 +215,15 @@ async function waitForTokens() {
     process.stdout.write('.');
   }
   console.log(' ✓\n');
+}
+
+async function waitForStartSignal() {
+  if (crawlRequested) return;
+  console.log('[等待] 请在浏览器扩展中点击"开始爬取"▶\n');
+  while (!crawlRequested) {
+    await sleep(2000);
+  }
+  console.log('[开始] 收到指令，开始爬取\n');
 }
 
 // ============================================================
@@ -311,18 +369,45 @@ async function main() {
   // 等待 tokens 就绪
   await waitForTokens();
 
-  // 读取已有进度（断点续爬）
+  // 循环：等待开始指令 → 爬取 → 可能暂停再等待
+  while (true) {
+    crawlRequested = false;
+    await waitForStartSignal();
+    await runCrawl();
+
+    if (!stopRequested) {
+      // 正常完成，退出循环
+      console.log('\n--- Token 服务器仍在运行，按 Ctrl+C 停止 ---');
+      break;
+    }
+
+    // 用户暂停，回到等待状态
+    console.log('\n[暂停] 爬取已暂停，可重新配置参数后再次点击"开始爬取"\n');
+  }
+}
+
+async function runCrawl() {
+  // 读取已有进度（断点续爬），检查搜索条件是否一致
   let progress = { completedIds: [], allJobs: [] };
   if (fs.existsSync(CONFIG.progressFile)) {
     try {
       progress = JSON.parse(fs.readFileSync(CONFIG.progressFile, 'utf-8'));
-      console.log(`[进度] 已有 ${progress.allJobs.length} 个岗位, ${progress.completedIds.length} 个已完成详情\n`);
+      const prev = progress._config || {};
+      if (prev.query !== CONFIG.apiParams.query ||
+          prev.city !== CONFIG.apiParams.city ||
+          prev.jobType !== CONFIG.apiParams.jobType) {
+        console.log('[进度] 搜索条件已变更，重置进度\n');
+        progress = { completedIds: [], allJobs: [] };
+      } else {
+        console.log(`[进度] 已有 ${progress.allJobs.length} 个岗位, ${progress.completedIds.length} 个已完成详情\n`);
+      }
     } catch {}
   }
 
   // ── 第1阶段: 搜索全部页面 ──
   let newJobs = [];
   for (let page = 1; page <= CONFIG.maxPages; page++) {
+    if (stopRequested) break;
     console.log(`[搜索] 第${page}页...`);
     try {
       const result = await searchJobs(page);
@@ -359,6 +444,7 @@ async function main() {
   console.log(`[详情] 待获取 ${pending.length} 个岗位的详细描述\n`);
 
   for (let i = 0; i < pending.length; i++) {
+    if (stopRequested) break;
     const item = pending[i];
     const sid = item.securityId;
     const lid = item.lid;
@@ -390,33 +476,34 @@ async function main() {
     }
   }
 
-  // ── 第3阶段: 输出 ──
-  const outputData = {
-    config: {
-      query: CONFIG.apiParams.query,
-      city: CONFIG.apiParams.city,
-      jobType: CONFIG.apiParams.jobType,
-      scrapeTime: new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19),
-    },
-    total: progress.allJobs.length,
-    completedDetails: progress.completedIds.length,
-    jobs: progress.allJobs.map(j => parseJob(j, j._detail)),
-  };
+  // ── 第3阶段: 输出（仅在正常完成时输出）
+  if (!stopRequested) {
+    const outputData = {
+      config: {
+        query: CONFIG.apiParams.query,
+        city: CONFIG.apiParams.city,
+        jobType: CONFIG.apiParams.jobType,
+        scrapeTime: new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19),
+      },
+      total: progress.allJobs.length,
+      completedDetails: progress.completedIds.length,
+      jobs: progress.allJobs.map(j => parseJob(j, j._detail)),
+    };
 
-  fs.writeFileSync(CONFIG.outputFile, JSON.stringify(outputData, null, 2), 'utf-8');
+    fs.writeFileSync(CONFIG.outputFile, JSON.stringify(outputData, null, 2), 'utf-8');
 
-  console.log(`\n✓ 完成！${outputData.total} 个岗位`);
-  console.log(`✓ 已保存到 ${CONFIG.outputFile}`);
-  console.log(`✓ 其中 ${outputData.completedDetails} 个有完整描述`);
+    console.log(`\n✓ 完成！${outputData.total} 个岗位`);
+    console.log(`✓ 已保存到 ${CONFIG.outputFile}`);
+    console.log(`✓ 其中 ${outputData.completedDetails} 个有完整描述`);
 
-  // 清理进度文件
-  fs.unlinkSync(CONFIG.progressFile);
-
-  console.log('\n--- Token 服务器仍在运行，按 Ctrl+C 停止 ---');
+    // 清理进度文件
+    fs.unlinkSync(CONFIG.progressFile);
+  }
 }
 
 function saveProgress(progress) {
-  fs.writeFileSync(CONFIG.progressFile, JSON.stringify(progress, null, 2), 'utf-8');
+  const withConfig = { ...progress, _config: { query: CONFIG.apiParams.query, city: CONFIG.apiParams.city, jobType: CONFIG.apiParams.jobType } };
+  fs.writeFileSync(CONFIG.progressFile, JSON.stringify(withConfig), 'utf-8');
 }
 
 main().catch((e) => {
