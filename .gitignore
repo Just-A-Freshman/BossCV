@@ -2,9 +2,10 @@ node_modules/
 tests/
 */data/config.json
 */data/jobs.json
+*/data/progress.json
+
 .github/
 docs/
-*/data/progress.json
 
 playwright.config.ts
 
