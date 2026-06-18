@@ -1,0 +1,14 @@
+{
+  "apiParams": {
+    "city": "101280100",
+    "jobType": "1902",
+    "query": "Agent",
+    "pageSize": 15,
+    "scene": 1
+  },
+  "maxPages": 10,
+  "delayBetweenPages": 6000,
+  "delayBetweenDetails": 5000,
+  "retryMax": 3,
+  "retryDelay": 8000
+}
