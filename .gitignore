@@ -1,8 +1,10 @@
 node_modules/
 tests/
+projects/
 */data/config.json
 */data/jobs.json
 */data/progress.json
+
 
 .github/
 docs/
