@@ -4,6 +4,7 @@ tests/
 */data/jobs.json
 .github/
 docs/
+*/data/progress.json
 
 playwright.config.ts
 
