@@ -41,7 +41,7 @@ node src/scraper.js
 
 ## 搜索关键词调整
 
-编辑 `src/scraper.js` 中的 `CONFIG.apiParams`:
+编辑 `data/settings.json` 中的 `apiParams`:
 
 ```js
 apiParams: {
