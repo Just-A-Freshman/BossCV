@@ -3,6 +3,7 @@ tests/
 */data/config.json
 */data/jobs.json
 .github/
+docs/
 
 playwright.config.ts
 
