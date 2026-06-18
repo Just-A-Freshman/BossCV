@@ -15,9 +15,11 @@ const path = require('path');
 const http = require('http');
 
 // ============================================================
-// 配置区
+// 配置区（优先级：settings.json > 内置默认值）
 // ============================================================
-const CONFIG = {
+const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
+
+const DEFAULTS = {
   apiParams: {
     city: '101280100',
     jobType: '1902',
@@ -26,16 +28,33 @@ const CONFIG = {
     scene: 1,
   },
   maxPages: 10,
-  delayBetweenPages: 6000,   // 翻页间隔(ms) — 放慢避免 WAF
+  delayBetweenPages: 6000,   // 翻页间隔(ms)
   delayBetweenDetails: 5000, // 详情间隔(ms)
   retryMax: 3,               // 详情 API 失败重试次数
   retryDelay: 8000,          // 重试间隔基础值(ms)
-
   configFile: path.join(__dirname, '..', 'data', 'config.json'),
   outputFile: path.join(__dirname, '..', 'data', 'jobs.json'),
   progressFile: path.join(__dirname, '..', 'data', 'progress.json'),
-  tokenServerPort: 8892,   // 内嵌 token 接收服务器端口
+  tokenServerPort: 8892,
 };
+
+function loadConfig() {
+  let user = {};
+  if (fs.existsSync(SETTINGS_FILE)) {
+    try {
+      user = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
+    } catch (e) {
+      console.warn(`[配置] 无法解析 ${SETTINGS_FILE}，使用默认配置: ${e.message}`);
+    }
+  }
+  // 浅合并顶层字段
+  const result = { ...DEFAULTS, ...user };
+  // 深合并 apiParams
+  result.apiParams = { ...DEFAULTS.apiParams, ...(user.apiParams || {}) };
+  return result;
+}
+
+const CONFIG = loadConfig();
 
 // ============================================================
 // HTTP 工具
@@ -208,7 +227,8 @@ async function getJobDetailWithRetry(securityId, lid, label) {
       // 网络错误等
     }
     if (attempt < CONFIG.retryMax) {
-      const wait = CONFIG.retryDelay * attempt; // 递增延迟
+      // 递增延迟 + 随机抖动 (±25%)，避免与 WAF 速率窗口同步
+      const wait = Math.round(CONFIG.retryDelay * attempt * (0.75 + Math.random() * 0.5));
       console.log(`    (第${attempt}次失败, ${wait / 1000}s 后重试...)`);
       await sleep(wait);
     }
