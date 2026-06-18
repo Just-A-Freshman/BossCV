@@ -51,11 +51,16 @@ function genTraceId() {
 }
 
 function buildHeaders(referer) {
-  const config = JSON.parse(fs.readFileSync(CONFIG.configFile, 'utf-8'));
+  // 优先读内存缓存，避免每次请求读磁盘
+  let cfg = lastTokens;
+  if (!cfg.cookie) {
+    // 兜底：从磁盘加载（理论上只在 waitForTokens 阶段触发）
+    cfg = JSON.parse(fs.readFileSync(CONFIG.configFile, 'utf-8'));
+  }
   return {
-    'Cookie': config.cookie,
-    'zp_token': config.zp_token,
-    'token': config.token,
+    'Cookie': cfg.cookie,
+    'zp_token': cfg.zp_token,
+    'token': cfg.token,
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0',
     'Accept': 'application/json, text/plain, */*',
     'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
@@ -129,6 +134,7 @@ async function waitForTokens() {
     try {
       const cfg = JSON.parse(fs.readFileSync(CONFIG.configFile, 'utf-8'));
       if (cfg.cookie && cfg.zp_token) {
+        lastTokens = { cookie: cfg.cookie, zp_token: cfg.zp_token, token: cfg.token || '' };
         tokenReady = true;
         return; // 已有 tokens，直接开始
       }
