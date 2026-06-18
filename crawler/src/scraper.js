@@ -38,6 +38,50 @@ const DEFAULTS = {
   tokenServerPort: 8892,
 };
 
+// ============================================================
+// 项目管理和全局岗位池
+// ============================================================
+const PROJECTS_DIR = path.join(__dirname, '..', 'data', 'projects');
+const PROJECTS_INDEX = path.join(PROJECTS_DIR, 'index.json');
+const POOL_FILE = path.join(PROJECTS_DIR, 'pool.json');
+let jobPool = {};
+let currentProjectId = null;
+let projectIndex = [];
+
+function initProjectDir() {
+  if (!fs.existsSync(PROJECTS_DIR)) {
+    fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+    fs.writeFileSync(PROJECTS_INDEX, '[]', 'utf-8');
+    fs.writeFileSync(POOL_FILE, '{}', 'utf-8');
+    console.log('[项目] 初始化 projects 目录\n');
+  }
+}
+
+function loadPool() {
+  if (fs.existsSync(POOL_FILE)) {
+    try { jobPool = JSON.parse(fs.readFileSync(POOL_FILE, 'utf-8')); } catch {}
+  }
+}
+
+function savePool() {
+  fs.writeFileSync(POOL_FILE, JSON.stringify(jobPool), 'utf-8');
+}
+
+function loadProjectIndex() {
+  if (!fs.existsSync(PROJECTS_INDEX)) return [];
+  try { return JSON.parse(fs.readFileSync(PROJECTS_INDEX, 'utf-8')); } catch { return []; }
+}
+
+function saveProjectIndex(idx) {
+  fs.writeFileSync(PROJECTS_INDEX, JSON.stringify(idx, null, 2), 'utf-8');
+}
+
+function genProjectId() {
+  const ts = Date.now().toString(36).slice(-4);
+  const rand = Math.random().toString(36).slice(2, 6);
+  return 'proj-' + ts + rand;
+}
+
 function loadConfig() {
   let user = {};
   if (fs.existsSync(SETTINGS_FILE)) {
@@ -119,6 +163,7 @@ let tokenReady = false;
 let lastTokens = { cookie: '', zp_token: '', token: '' };
 let crawlRequested = false;
 let stopRequested = false;
+let poolSaved = true; // 追踪 pool 是否需写入
 
 function startTokenServer() {
   const server = http.createServer((req, res) => {
@@ -186,7 +231,93 @@ function startTokenServer() {
     if (req.url === '/stop-crawl') {
       stopRequested = true;
       crawlRequested = false;
+      // 更新项目状态为 idle
+      if (currentProjectId) {
+        const idx = loadProjectIndex();
+        const p = idx.find(x => x.id === currentProjectId);
+        if (p) { p.status = 'idle'; saveProjectIndex(idx); }
+      }
       res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    // ---- 项目管理 API ----
+    if (req.url === '/projects' && req.method === 'GET') {
+      const idx = loadProjectIndex();
+      res.end(JSON.stringify(idx));
+      return;
+    }
+
+    if (req.url === '/projects' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const { name, apiParams } = JSON.parse(body);
+          if (!name || !apiParams) { res.writeHead(400); res.end(JSON.stringify({ ok: false, error: '缺少 name 或 apiParams' })); return; }
+          const id = genProjectId(name);
+          const dir = path.join(PROJECTS_DIR, id);
+          if (fs.existsSync(dir)) { res.writeHead(409); res.end(JSON.stringify({ ok: false, error: '项目已存在' })); return; }
+          fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(apiParams, null, 2), 'utf-8');
+          fs.writeFileSync(path.join(dir, 'progress.json'), JSON.stringify({ completedIds: [], allJobs: [] }), 'utf-8');
+          const idx = loadProjectIndex();
+          idx.push({ id, name, apiParams, created: new Date().toISOString(), totalJobs: 0, completedDetails: 0, status: 'idle' });
+          saveProjectIndex(idx);
+          res.end(JSON.stringify({ ok: true, id }));
+        } catch (e) { res.writeHead(400); res.end(JSON.stringify({ ok: false, error: e.message })); }
+      });
+      return;
+    }
+
+    // POST /projects/{id}/start  — 开始爬取指定项目
+    const startMatch = req.url && req.url.match(/^\/projects\/([^/]+)\/start$/);
+    if (startMatch && req.method === 'POST') {
+      currentProjectId = decodeURIComponent(startMatch[1]);
+      const idx = loadProjectIndex();
+      const proj = idx.find(p => p.id === currentProjectId);
+      if (!proj) { res.writeHead(404); res.end(JSON.stringify({ ok: false, error: '项目不存在' })); return; }
+      // 从项目加载配置
+      const cfgFile = path.join(PROJECTS_DIR, currentProjectId, 'config.json');
+      if (fs.existsSync(cfgFile)) {
+        Object.assign(CONFIG.apiParams, JSON.parse(fs.readFileSync(cfgFile, 'utf-8')));
+      }
+      proj.status = 'running';
+      saveProjectIndex(idx);
+      stopRequested = false;
+      crawlRequested = true;
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    // DELETE /projects/{id}
+    const delMatch = req.url && req.url.match(/^\/projects\/([^/]+)$/);
+    if (delMatch && req.method === 'DELETE') {
+      const id = delMatch[1];
+      const dir = path.join(PROJECTS_DIR, id);
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+      const idx = loadProjectIndex().filter(p => p.id !== id);
+      saveProjectIndex(idx);
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.url === '/pool/stats') {
+      res.end(JSON.stringify({ totalJobs: Object.keys(jobPool).length }));
+      return;
+    }
+
+    // GET /projects/{id}/output — 返回项目的 output.json
+    const outputMatch = req.url && req.url.match(/^\/projects\/([^/]+)\/output$/);
+    if (outputMatch) {
+      const outputPath = path.join(PROJECTS_DIR, outputMatch[1], 'output.json');
+      if (fs.existsSync(outputPath)) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(fs.readFileSync(outputPath, 'utf-8'));
+      } else {
+        res.writeHead(404);
+        res.end(JSON.stringify({ ok: false, error: 'output.json 不存在或项目尚未完成' }));
+      }
       return;
     }
 
@@ -362,6 +493,16 @@ async function main() {
   console.log(`  城市:   广州 | 最大页: ${CONFIG.maxPages}`);
   console.log('========================================\n');
 
+  // 初始化项目目录和全局岗位池
+  initProjectDir();
+  loadPool();
+
+  // 清理遗留的 running 状态（上次爬虫异常退出）
+  const idx = loadProjectIndex();
+  let dirty = false;
+  for (const p of idx) { if (p.status === 'running') { p.status = 'idle'; dirty = true; } }
+  if (dirty) { saveProjectIndex(idx); console.log('[项目] 已清理遗留的 running 状态\n'); }
+
   // 启动内嵌 token 接收服务器（端口 8892）
   startTokenServer();
   console.log(`[服务器] Token 接收端口: ${CONFIG.tokenServerPort}\n`);
@@ -386,82 +527,80 @@ async function main() {
   }
 }
 
+function getProjectPath(...segments) {
+  if (!currentProjectId) return null;
+  return path.join(PROJECTS_DIR, currentProjectId, ...segments);
+}
+
 async function runCrawl() {
-  // 读取已有进度（断点续爬），检查搜索条件是否一致
+  const projDir = getProjectPath();
+  const projProgressFile = projDir ? path.join(projDir, 'progress.json') : CONFIG.progressFile;
+  const projOutputFile  = projDir ? path.join(projDir, 'output.json')  : CONFIG.outputFile;
+
+  // 读取已有进度
   let progress = { completedIds: [], allJobs: [] };
-  if (fs.existsSync(CONFIG.progressFile)) {
+  if (fs.existsSync(projProgressFile)) {
     try {
-      progress = JSON.parse(fs.readFileSync(CONFIG.progressFile, 'utf-8'));
-      const prev = progress._config || {};
-      if (prev.query !== CONFIG.apiParams.query ||
-          prev.city !== CONFIG.apiParams.city ||
-          prev.jobType !== CONFIG.apiParams.jobType) {
-        console.log('[进度] 搜索条件已变更，重置进度\n');
-        progress = { completedIds: [], allJobs: [] };
-      } else {
-        console.log(`[进度] 已有 ${progress.allJobs.length} 个岗位, ${progress.completedIds.length} 个已完成详情\n`);
-      }
+      progress = JSON.parse(fs.readFileSync(projProgressFile, 'utf-8'));
     } catch {}
   }
-
-  // ── 第1阶段: 搜索全部页面 ──
-  let newJobs = [];
-  for (let page = 1; page <= CONFIG.maxPages; page++) {
-    if (stopRequested) break;
-    console.log(`[搜索] 第${page}页...`);
-    try {
-      const result = await searchJobs(page);
-      if (result.jobs.length === 0) {
-        console.log('  无更多数据');
-        break;
-      }
-      newJobs = newJobs.concat(result.jobs);
-      console.log(`  +${result.jobs.length} 个（累计 ${newJobs.length}）`);
-      if (!result.hasMore) {
-        console.log('  已到最后一页');
-        break;
-      }
-      await sleep(CONFIG.delayBetweenPages);
-    } catch (e) {
-      console.log(`  [错误] ${e.message}`);
-      break;
+  // ── 第1阶段: 搜索（已有进度时跳过） ──
+  if (progress.allJobs.length === 0) {
+    let newJobs = [];
+    for (let page = 1; page <= CONFIG.maxPages; page++) {
+      if (stopRequested) break;
+      console.log(`[搜索] 第${page}页...`);
+      try {
+        const result = await searchJobs(page);
+        if (result.jobs.length === 0) { console.log('  无更多数据'); break; }
+        newJobs = newJobs.concat(result.jobs);
+        console.log(`  +${result.jobs.length} 个（累计 ${newJobs.length}）`);
+        if (!result.hasMore) { console.log('  已到最后一页'); break; }
+        await sleep(CONFIG.delayBetweenPages);
+      } catch (e) { console.log(`  [错误] ${e.message}`); break; }
     }
+    progress.allJobs = newJobs;
+  } else {
+    console.log(`[进度] 续爬 ${progress.allJobs.length} 个岗位, 已完成 ${progress.completedIds.length} 个详情\n`);
   }
 
-  // 合并到总列表（去重）
-  const existingIds = new Set(progress.allJobs.map(j => j.id));
-  for (const nj of newJobs) {
-    const id = nj.encryptJobId;
-    if (!existingIds.has(id)) {
-      progress.allJobs.push(nj);
-      existingIds.add(id);
-    }
-  }
-  console.log(`\n[合并] 共 ${progress.allJobs.length} 个岗位\n`);
-
-  // ── 第2阶段: 获取详情描述 ──
+  // 统计 pool 命中情况
+  let poolHits = 0;
   const pending = progress.allJobs.filter(j => j.encryptJobId && !progress.completedIds.includes(j.encryptJobId));
-  console.log(`[详情] 待获取 ${pending.length} 个岗位的详细描述\n`);
+  for (const j of pending) {
+    if (jobPool[j.encryptJobId]) {
+      j._detail = jobPool[j.encryptJobId].detail;
+      progress.completedIds.push(j.encryptJobId);
+      poolHits++;
+    }
+  }
+  if (poolHits > 0) console.log(`[池] 命中 ${poolHits} 个岗位，跳过 API 请求`);
+  savePoolProgress(progress, projProgressFile);
 
-  for (let i = 0; i < pending.length; i++) {
+  // ── 第2阶段: 获取剩余详情 ──
+  const stillPending = progress.allJobs.filter(j => j.encryptJobId && !progress.completedIds.includes(j.encryptJobId));
+  console.log(`[详情] 待获取 ${stillPending.length} 个岗位\n`);
+
+  let poolDirty = false;
+  for (let i = 0; i < stillPending.length; i++) {
     if (stopRequested) break;
-    const item = pending[i];
+    const item = stillPending[i];
     const sid = item.securityId;
     const lid = item.lid;
-
     if (!sid || !lid) {
-      console.log(`  [${i + 1}/${pending.length}] ${item.jobName} — 跳过（无securityId）`);
+      console.log(`  [${i + 1}/${stillPending.length}] ${item.jobName} — 跳过（无securityId）`);
       progress.completedIds.push(item.encryptJobId);
-      saveProgress(progress);
+      savePoolProgress(progress, projProgressFile);
       continue;
     }
-
     const label = `${item.jobName} @ ${item.brandName || ''}`;
-    process.stdout.write(`  [${i + 1}/${pending.length}] ${label} ...`);
+    process.stdout.write(`  [${i + 1}/${stillPending.length}] ${label} ...`);
     const detail = await getJobDetailWithRetry(sid, lid, label);
 
     if (detail) {
       item._detail = detail;
+      jobPool[item.encryptJobId] = { detail, scrapedAt: new Date().toISOString() };
+      poolDirty = true;
       const descLen = (detail.postDescription || '').length;
       console.log(` ✓ (${descLen}字)`);
     } else {
@@ -469,19 +608,21 @@ async function runCrawl() {
     }
 
     progress.completedIds.push(item.encryptJobId);
-    saveProgress(progress);
+    savePoolProgress(progress, projProgressFile);
 
-    if (i < pending.length - 1) {
-      await sleep(CONFIG.delayBetweenDetails);
-    }
+    // 每 20 个新岗位写一次 pool
+    if (poolDirty && progress.completedIds.length % 20 === 0) { savePool(); poolDirty = false; }
+
+    if (i < stillPending.length - 1) await sleep(CONFIG.delayBetweenDetails);
   }
 
-  // ── 第3阶段: 输出（仅在正常完成时输出）
+  if (poolDirty) savePool();
+
+  // ── 第3阶段: 输出 ──
   if (!stopRequested) {
     const outputData = {
       config: {
-        query: CONFIG.apiParams.query,
-        city: CONFIG.apiParams.city,
+        query: CONFIG.apiParams.query, city: CONFIG.apiParams.city,
         jobType: CONFIG.apiParams.jobType,
         scrapeTime: new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19),
       },
@@ -489,21 +630,29 @@ async function runCrawl() {
       completedDetails: progress.completedIds.length,
       jobs: progress.allJobs.map(j => parseJob(j, j._detail)),
     };
+    fs.writeFileSync(projOutputFile, JSON.stringify(outputData, null, 2), 'utf-8');
+    console.log(`\n完成！${outputData.total} 个岗位 → ${projOutputFile}`);
+    console.log(`其中 ${outputData.completedDetails} 个有完整描述`);
+    if (fs.existsSync(projProgressFile)) fs.unlinkSync(projProgressFile);
 
-    fs.writeFileSync(CONFIG.outputFile, JSON.stringify(outputData, null, 2), 'utf-8');
-
-    console.log(`\n✓ 完成！${outputData.total} 个岗位`);
-    console.log(`✓ 已保存到 ${CONFIG.outputFile}`);
-    console.log(`✓ 其中 ${outputData.completedDetails} 个有完整描述`);
-
-    // 清理进度文件
-    fs.unlinkSync(CONFIG.progressFile);
+    // 更新项目索引 — 完成
+    if (currentProjectId) {
+      const idx = loadProjectIndex();
+      const p = idx.find(x => x.id === currentProjectId);
+      if (p) { p.status = 'completed'; p.totalJobs = outputData.total; p.completedDetails = outputData.completedDetails; saveProjectIndex(idx); }
+    }
+  } else {
+    // 更新项目索引 — 暂停
+    if (currentProjectId) {
+      const idx = loadProjectIndex();
+      const p = idx.find(x => x.id === currentProjectId);
+      if (p) { p.status = 'idle'; p.totalJobs = progress.allJobs.length; p.completedDetails = progress.completedIds.length; saveProjectIndex(idx); }
+    }
   }
 }
 
-function saveProgress(progress) {
-  const withConfig = { ...progress, _config: { query: CONFIG.apiParams.query, city: CONFIG.apiParams.city, jobType: CONFIG.apiParams.jobType } };
-  fs.writeFileSync(CONFIG.progressFile, JSON.stringify(withConfig), 'utf-8');
+function savePoolProgress(progress, projProgressFile) {
+  fs.writeFileSync(projProgressFile, JSON.stringify(progress), 'utf-8');
 }
 
 main().catch((e) => {
