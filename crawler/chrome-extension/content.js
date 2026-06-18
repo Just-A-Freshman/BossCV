@@ -111,7 +111,7 @@
   // ---- 加载项目列表 ----
   async function loadProjects() {
     try {
-      const resp = await fetch(API + '/projects');
+      const resp = await fetch(API + '/projects?_=' + Date.now());
       projects = await resp.json();
       const val = sel.value;
       sel.innerHTML = '<option value="">-- 选择项目 --</option>';
@@ -219,7 +219,13 @@
     const name = proj ? (proj.name || id) : id;
     if (!confirm('确认删除项目 "' + name + '" ？\n项目文件和进度将被删除，全局岗位池不受影响。')) return;
     try {
-      await fetch(API + '/projects/' + id, { method: 'DELETE' });
+      const resp = await fetch(API + '/projects/' + id + '/delete', { method: 'POST' });
+      const data = await resp.json();
+      if (!data.ok) {
+        statusEl.textContent = '删除失败: ' + (data.error || '服务器返回异常');
+        return;
+      }
+      console.log('[删除] 成功:', data);
       sel.value = '';
       currentProjectId = null;
       await loadProjects();

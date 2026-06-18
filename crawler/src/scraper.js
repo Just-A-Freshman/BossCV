@@ -82,6 +82,15 @@ function genProjectId() {
   return 'proj-' + ts + rand;
 }
 
+// 用用户输入的项目名作为文件夹名，去掉 Windows 不允许的文件名字符
+function sanitizeProjectName(name) {
+  if (!name || !name.trim()) return genProjectId();
+  let safe = name.trim().replace(/[\\/:*?"<>|]/g, '_');
+  // 避免与之前随机 ID 格式冲突（proj-xxx），不允许单纯以 proj- 开头
+  if (safe.match(/^proj-/i)) safe = 'p-' + safe;
+  return safe || genProjectId();
+}
+
 function loadConfig() {
   let user = {};
   if (fs.existsSync(SETTINGS_FILE)) {
@@ -167,13 +176,17 @@ let poolSaved = true; // 追踪 pool 是否需写入
 
 function startTokenServer() {
   const server = http.createServer((req, res) => {
+    // 去掉 query string 做路由匹配，支持客户端缓存清除参数
+    const pathname = req.url.indexOf('?') !== -1 ? req.url.split('?')[0] : req.url;
+
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Max-Age', '0');
 
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-    if (req.method === 'POST' && req.url === '/update-token') {
+    if (req.method === 'POST' && pathname === '/update-token') {
       let body = '';
       req.on('data', chunk => body += chunk);
       req.on('end', () => {
@@ -194,7 +207,7 @@ function startTokenServer() {
       return;
     }
 
-    if (req.method === 'POST' && req.url === '/update-settings') {
+    if (req.method === 'POST' && pathname === '/update-settings') {
       let body = '';
       req.on('data', chunk => body += chunk);
       req.on('end', () => {
@@ -221,14 +234,14 @@ function startTokenServer() {
       return;
     }
 
-    if (req.url === '/start-crawl') {
+    if (pathname === '/start-crawl') {
       stopRequested = false;
       crawlRequested = true;
       res.end(JSON.stringify({ ok: true }));
       return;
     }
 
-    if (req.url === '/stop-crawl') {
+    if (pathname === '/stop-crawl') {
       stopRequested = true;
       crawlRequested = false;
       // 更新项目状态为 idle
@@ -242,26 +255,33 @@ function startTokenServer() {
     }
 
     // ---- 项目管理 API ----
-    if (req.url === '/projects' && req.method === 'GET') {
+    if (pathname === '/projects' && req.method === 'GET') {
       const idx = loadProjectIndex();
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.end(JSON.stringify(idx));
       return;
     }
 
-    if (req.url === '/projects' && req.method === 'POST') {
+    if (pathname === '/projects' && req.method === 'POST') {
       let body = '';
       req.on('data', chunk => body += chunk);
       req.on('end', () => {
         try {
           const { name, apiParams } = JSON.parse(body);
           if (!name || !apiParams) { res.writeHead(400); res.end(JSON.stringify({ ok: false, error: '缺少 name 或 apiParams' })); return; }
-          const id = genProjectId(name);
+          const id = sanitizeProjectName(name);
+          // 检查索引中是否已有同名项目
+          const idx = loadProjectIndex();
+          if (idx.some(p => p.id === id)) {
+            res.writeHead(409);
+            res.end(JSON.stringify({ ok: false, error: '项目名称已存在: ' + name }));
+            return;
+          }
           const dir = path.join(PROJECTS_DIR, id);
-          if (fs.existsSync(dir)) { res.writeHead(409); res.end(JSON.stringify({ ok: false, error: '项目已存在' })); return; }
+          if (fs.existsSync(dir)) { res.writeHead(409); res.end(JSON.stringify({ ok: false, error: '项目目录冲突' })); return; }
           fs.mkdirSync(dir, { recursive: true });
           fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(apiParams, null, 2), 'utf-8');
           fs.writeFileSync(path.join(dir, 'progress.json'), JSON.stringify({ completedIds: [], allJobs: [] }), 'utf-8');
-          const idx = loadProjectIndex();
           idx.push({ id, name, apiParams, created: new Date().toISOString(), totalJobs: 0, completedDetails: 0, status: 'idle' });
           saveProjectIndex(idx);
           res.end(JSON.stringify({ ok: true, id }));
@@ -271,7 +291,7 @@ function startTokenServer() {
     }
 
     // POST /projects/{id}/start  — 开始爬取指定项目
-    const startMatch = req.url && req.url.match(/^\/projects\/([^/]+)\/start$/);
+    const startMatch = pathname && pathname.match(/^\/projects\/([^/]+)\/start$/);
     if (startMatch && req.method === 'POST') {
       currentProjectId = decodeURIComponent(startMatch[1]);
       const idx = loadProjectIndex();
@@ -290,27 +310,38 @@ function startTokenServer() {
       return;
     }
 
-    // DELETE /projects/{id}
-    const delMatch = req.url && req.url.match(/^\/projects\/([^/]+)$/);
-    if (delMatch && req.method === 'DELETE') {
-      const id = delMatch[1];
+    // POST /projects/{id}/delete — 删除项目（用 POST 避免 CORS 预检问题）
+    const delMatch = pathname && pathname.match(/^\/projects\/([^/]+)\/delete$/);
+    console.log(`[路由] ${req.method} ${pathname} — delMatch:`, delMatch ? `id=${delMatch[1]}` : 'null');
+    if (delMatch && req.method === 'POST') {
+      const id = decodeURIComponent(delMatch[1]);
+      console.log(`[删除] 开始处理: id="${id}"`);
       const dir = path.join(PROJECTS_DIR, id);
-      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
-      const idx = loadProjectIndex().filter(p => p.id !== id);
-      saveProjectIndex(idx);
+      console.log(`[删除] 目录路径: ${dir}, 存在=${fs.existsSync(dir)}`);
+      if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+        console.log(`[删除] 目录已删除`);
+      }
+      const before = loadProjectIndex();
+      console.log(`[删除] 删除前索引条目数: ${before.length}`);
+      for (const p of before) console.log(`  - id="${p.id}"`);
+      const after = before.filter(p => p.id !== id);
+      saveProjectIndex(after);
+      console.log(`[删除] 删除后索引条目数: ${after.length}`);
       res.end(JSON.stringify({ ok: true }));
+      console.log(`[删除] 响应已发送`);
       return;
     }
 
-    if (req.url === '/pool/stats') {
+    if (pathname === '/pool/stats') {
       res.end(JSON.stringify({ totalJobs: Object.keys(jobPool).length }));
       return;
     }
 
     // GET /projects/{id}/output — 返回项目的 output.json
-    const outputMatch = req.url && req.url.match(/^\/projects\/([^/]+)\/output$/);
+    const outputMatch = pathname && pathname.match(/^\/projects\/([^/]+)\/output$/);
     if (outputMatch) {
-      const outputPath = path.join(PROJECTS_DIR, outputMatch[1], 'output.json');
+      const outputPath = path.join(PROJECTS_DIR, decodeURIComponent(outputMatch[1]), 'output.json');
       if (fs.existsSync(outputPath)) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(fs.readFileSync(outputPath, 'utf-8'));
@@ -322,6 +353,7 @@ function startTokenServer() {
     }
 
     res.writeHead(404);
+    console.log(`[404] 未匹配: ${req.method} ${pathname}`);
     res.end('not found');
   });
   server.listen(CONFIG.tokenServerPort);
