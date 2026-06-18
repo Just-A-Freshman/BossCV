@@ -1,15 +1,18 @@
 /**
- * Boss直聘岗位信息爬虫 v6（最终版）
+ * Boss直聘岗位信息爬虫 v7
  *
  * 策略：
- * 1. 从 Fiddler 导出的 tokens 认证
+ * 1. 内嵌 Token 接收服务器，从 Chrome 扩展获取认证 tokens
  * 2. 搜索 API 获取岗位列表（含 securityId）
  * 3. 详情 API 获取完整岗位描述（按页间隔请求，绕过 WAF）
  * 4. 断点续爬（已获取的不会重复请求）
+ *
+ * 使用： node src/scraper.js（单进程，单终端）
  */
 
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 
 // ============================================================
 // 配置区
@@ -31,6 +34,7 @@ const CONFIG = {
   configFile: path.join(__dirname, '..', 'data', 'config.json'),
   outputFile: path.join(__dirname, '..', 'data', 'jobs.json'),
   progressFile: path.join(__dirname, '..', 'data', 'progress.json'),
+  tokenServerPort: 8892,   // 内嵌 token 接收服务器端口
 };
 
 // ============================================================
@@ -78,6 +82,66 @@ async function fetchAPI(url, opts = {}) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ============================================================
+// 内嵌 Token 接收服务器（替代独立的 token-server.js）
+// ============================================================
+let tokenReady = false;
+let lastTokens = { cookie: '', zp_token: '', token: '' };
+
+function startTokenServer() {
+  const server = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+    if (req.method === 'POST' && req.url === '/update-token') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const { cookie, zp_token, token } = JSON.parse(body);
+          const changed = cookie !== lastTokens.cookie || zp_token !== lastTokens.zp_token || token !== lastTokens.token;
+          if (changed) {
+            lastTokens = { cookie, zp_token, token };
+            fs.writeFileSync(CONFIG.configFile, JSON.stringify(lastTokens, null, 2), 'utf-8');
+            tokenReady = true;
+          }
+          res.end(JSON.stringify({ ok: true }));
+        } catch (e) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+      });
+      return;
+    }
+    res.writeHead(404);
+    res.end('not found');
+  });
+  server.listen(CONFIG.tokenServerPort);
+  return server;
+}
+
+async function waitForTokens() {
+  if (fs.existsSync(CONFIG.configFile)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG.configFile, 'utf-8'));
+      if (cfg.cookie && cfg.zp_token) {
+        tokenReady = true;
+        return; // 已有 tokens，直接开始
+      }
+    } catch (_) {}
+  }
+
+  process.stdout.write('[认证] 等待扩展发送 tokens');
+  while (!tokenReady) {
+    await sleep(2000);
+    process.stdout.write('.');
+  }
+  console.log(' ✓\n');
+}
 
 // ============================================================
 // 搜索 API
@@ -209,10 +273,17 @@ function parseJob(listItem, detailInfo) {
 // ============================================================
 async function main() {
   console.log('========================================');
-  console.log('  Boss直聘 岗位信息爬虫 v6');
+  console.log('  Boss直聘 岗位信息爬虫 v7');
   console.log(`  关键词: ${CONFIG.apiParams.query}`);
   console.log(`  城市:   广州 | 最大页: ${CONFIG.maxPages}`);
   console.log('========================================\n');
+
+  // 启动内嵌 token 接收服务器（端口 8892）
+  startTokenServer();
+  console.log(`[服务器] Token 接收端口: ${CONFIG.tokenServerPort}\n`);
+
+  // 等待 tokens 就绪
+  await waitForTokens();
 
   // 读取已有进度（断点续爬）
   let progress = { completedIds: [], allJobs: [] };
@@ -314,6 +385,8 @@ async function main() {
 
   // 清理进度文件
   fs.unlinkSync(CONFIG.progressFile);
+
+  console.log('\n--- Token 服务器仍在运行，按 Ctrl+C 停止 ---');
 }
 
 function saveProgress(progress) {

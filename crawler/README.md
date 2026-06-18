@@ -1,47 +1,41 @@
-# 简易BOSS直聘岗位信息爬虫-使用说明
-## 第1步：安装nodejs依赖
+# BOSS直聘岗位信息爬虫 — 使用说明
 
-检查是否处于`crawler/`目录下，随后按照依赖项：
+## 第1步：安装依赖
+
+确保在 `crawler/` 目录下：
 ```bash
 npm install
 ```
 
 
 
-## 第2步：安装Chorme浏览器依赖
+## 第2步：安装 Chrome 扩展
 
-你需要安装两个插件：
+1. 打开 Chrome → `chrome://extensions`
+2. 开启右上角的 **"开发者模式"**
+3. 点击左上角 **"加载已解压的扩展"**
+4. 选择 `chrome-extension` 目录
 
-- 篡改猴：请自行在应用商店搜索或直接在此点击下载：
-    https://chrome.zzzmh.cn/info/dhdgffkkebhmkfjojejmpbldmpobfkfo
-
-    拓展安装完成后，导入并启用脚本 `extensions/boss-refresh.user.js`
-
-- BOSS直聘 Token 捕获器：进入Chorme的扩展界面，点击左上角**"加载已解压的扩展"**，选择当前目录的`extensions/chrome-extension`文件夹，即完成安装
+> 扩展的作用：从浏览器请求中自动捕获 cookies、zp_token、token 等认证信息，并发送给爬虫程序。
+>
+> **注意：扩展会每 10 秒自动刷新一次 zhipin.com 页面来保持 token 新鲜，这是正常的。**
 
 
 
 ## 第3步：登录 BOSS直聘
 
-**在Chorme浏览器中登录Boss直聘**。此时由于篡改猴中新增插件的缘故（在右下角有提示），每10s会刷新一次页面。在爬虫结束后请自行在拓展中关闭这个脚本。
-
-PS：该刷新脚本的目的是为了获取Boss直聘定时刷新的Token，并通过**"BOSS直聘 Token 捕获器"**将新的Token信息送给程序，以便进行登录状态下数据的持续爬取。可以说是原始到极致到又简单好用的一种策略了。
+在同一个 Chrome 浏览器中打开 [Boss直聘](https://www.zhipin.com) 并登录，**切换到【职位】页面**，保持打开状态。由于第2步扩展的缘故，页面会**每10秒自动刷新一次**，以保持token新鲜。这是正常现象，只需在爬虫后关闭拓展即可不再刷新。可以把 zhipin 标签页放到一个单独的窗口里，不影响你浏览其他网页。
 
 
 
-## 第4步：启动程序
+## 第4步：运行爬虫
 
-1. 终端1，运行Token捕获服务，实时更新用户的Token信息：
-    ```bash
-    node src/token-server.js
-    ```
-    
-2. 终端2，运行真正的爬虫服务：
-    ```
-    node src/scraper.js
-    ```
+在终端运行：
+```bash
+node src/scraper.js
+```
 
-    
+爬虫运行完成后，按 **Ctrl+C** 停止。爬取数据会输出到： `data/jobs.json`
 
 
 
@@ -57,3 +51,6 @@ apiParams: {
   pageSize: 15,
 }
 ```
+
+常用城市代码：广州 `101280100`、深圳 `101280600`、北京 `101010100`、上海 `101020100`
+

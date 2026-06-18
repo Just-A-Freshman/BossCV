@@ -1,11 +1,12 @@
 {
-  "name": "BOSS直聘 Token 捕获器",
-  "description": "自动捕获 BOSS直聘 API 请求中的认证 tokens，发送到本地服务器",
-  "version": "1.0",
   "manifest_version": 3,
+  "name": "BOSS直聘 Token 捕获器",
+  "description": "捕获 BOSS直聘 API 请求中的 tokens，发送到本地爬虫程序",
+  "version": "2.0",
   "permissions": [
     "webRequest",
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "https://www.zhipin.com/*"
@@ -14,7 +15,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Token Capturer",
+    "default_title": "BOSS直聘 Token 捕获器",
     "default_popup": "popup.html"
   }
 }
