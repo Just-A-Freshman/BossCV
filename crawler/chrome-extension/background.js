@@ -104,8 +104,17 @@ chrome.webRequest.onBeforeRequest.addListener(
 // ============================================================
 // 消息路由（接收 content.js 指令）
 // ============================================================
-const REFRESH_INTERVAL_MS = 2000;
+const DEFAULT_INTERVAL_S = 10;
 let refreshTabId = null;
+
+async function getRefreshIntervalMs() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('refreshInterval', (data) => {
+      const s = data.refreshInterval || DEFAULT_INTERVAL_S;
+      resolve(s * 1000);
+    });
+  });
+}
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.command) {
@@ -127,6 +136,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case 'getSearchParams':
       sendResponse({ params: lastSearchParams || null });
+      break;
+
+    case 'setRefreshInterval':
+      // 如果正在运行，重建 alarm 应用新间隔
+      chrome.alarms.clear('refresh-zhipin', () => {
+        if (refreshTabId) startRefresh();
+      });
+      sendResponse({ ok: true });
       break;
 
     default:
@@ -160,9 +177,7 @@ async function saveSearchParams(urlParams) {
 // ============================================================
 async function startCrawl() {
   try {
-    // 先启动页面保活刷新（确保 token 新鲜）
-    startRefresh();
-    // 再通知爬虫开始
+    await startRefresh();
     const resp = await fetch(CRAWL_URL);
     const data = await resp.json();
     return data;
@@ -176,7 +191,7 @@ async function startCrawl() {
 // ============================================================
 async function startProject(projectId) {
   try {
-    startRefresh();
+    await startRefresh();
     const resp = await fetch(PROJECT_API + '/' + projectId + '/start', { method: 'POST' });
     const data = await resp.json();
     return data;
@@ -201,9 +216,10 @@ async function stopCrawl() {
 // ============================================================
 // 页面保活刷新
 // ============================================================
-function startRefresh() {
+async function startRefresh() {
+  const intervalMs = await getRefreshIntervalMs();
   chrome.alarms.create('refresh-zhipin', {
-    periodInMinutes: REFRESH_INTERVAL_MS / 60000,
+    periodInMinutes: intervalMs / 60000,
   });
 }
 

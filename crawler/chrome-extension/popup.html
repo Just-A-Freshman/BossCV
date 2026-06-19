@@ -1,11 +1,22 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>Token Capturer</title></head>
-<body style="width:300px;padding:16px;font-family:sans-serif">
-  <h3>BOSS直聘 Token 捕获器</h3>
-  <p id="status">等待捕获...</p>
-  <hr>
-  <div id="tokenDisplay" style="font-size:12px;word-break:break-all"></div>
+<head><meta charset="utf-8"><title>爬虫控制面板</title></head>
+<body style="width:320px;padding:16px;font-family:-apple-system,'Microsoft YaHei',sans-serif;font-size:13px">
+  <h3 style="margin:0 0 12px;font-size:15px;color:#333">爬虫控制面板</h3>
+
+  <div style="background:#f6f8fa;border-radius:6px;padding:10px;margin-bottom:12px">
+    <div style="font-size:12px;color:#666;margin-bottom:4px">刷新间隔</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <input type="range" id="intervalRange" min="1" max="10" step="1" style="flex:1">
+      <span id="intervalLabel" style="font-weight:600;min-width:40px">10s</span>
+    </div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:10px 0">
+
+  <p id="status" style="font-size:12px;color:#999">等待捕获...</p>
+  <div id="tokenDisplay" style="font-size:11px;word-break:break-all;color:#555;line-height:1.5"></div>
+
   <script src="popup.js"></script>
 </body>
 </html>

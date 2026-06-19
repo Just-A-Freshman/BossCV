@@ -172,6 +172,8 @@
       statusEl.className = 'ps-status crawling';
       projectRow.style.display = 'none';
       idleActions.style.display = 'none';
+      stopBtn.textContent = '暂停爬取';
+      stopBtn.disabled = false;
       crawlingActions.style.display = '';
       doneActions.style.display = 'none';
     } else if (proj.status === 'completed' && proj.totalJobs > 0) {
@@ -181,12 +183,17 @@
       projectRow.style.display = '';
       idleActions.style.display = 'none';
       crawlingActions.style.display = 'none';
+      viewBtn.textContent = '查看结果';
+      rerunBtn.textContent = '重新爬取';
+      rerunBtn.disabled = false;
       doneActions.style.display = '';
     } else {
       progressEl.style.display = 'none';
       statusEl.textContent = '待机中';
       statusEl.className = 'ps-status idle';
       projectRow.style.display = '';
+      startBtn.textContent = '开始爬取';
+      startBtn.disabled = false;
       idleActions.style.display = '';
       crawlingActions.style.display = 'none';
       doneActions.style.display = 'none';
