@@ -187,6 +187,18 @@
     }, 200);
   })();
 
+  // 一次性注入 CSS，强制 BOSS直聘输入框换行（浏览器原生管理，不轮询）
+  (function injectInputFixCSS() {
+    var style = document.createElement('style');
+    style.textContent = [
+      // 输入框容器限宽
+      '.chat-editor,.editor-container,[class*="chat-input-area"],[class*="editor_wrap"],[class*="chat-footer"]{min-width:0!important;max-width:100%!important}',
+      // 输入框本身强制换行
+      '.chat-editor [contenteditable],.editor-container [contenteditable],.chat-footer [contenteditable],[class*="input-area"] [contenteditable]{white-space:pre-wrap!important;word-break:break-word!important;overflow-wrap:break-word!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important}',
+    ].join(' ');
+    document.head.appendChild(style);
+  })();
+
   // ============================================================
   // 3. 构建手机风格 AI 面板（含深度思考样式）
   // ============================================================
@@ -228,12 +240,12 @@
     '.sys-msg{align-self:center;font-size:12px;color:#999;padding:6px 0;font-family:-apple-system,"Microsoft YaHei",sans-serif}',
     '.sys-msg.error{color:#ff4d4f}',
     '.bottom{background:#fff;border-top:1px solid #eee;padding:10px 12px}',
-    '.input-row{display:flex;align-items:flex-start;gap:8px}',
-    '.input-row textarea{display:block;width:100%;border:none;outline:none;background:transparent;padding:0;margin:0;font:inherit;color:inherit;resize:none;overflow-y:hidden;box-sizing:border-box}',
+    '.input-row{display:flex;align-items:flex-start;gap:8px;min-width:0}',
+    '.input-row textarea{display:block;width:100%;min-width:0;max-width:100%;border:none;outline:none;background:transparent;padding:0;margin:0;font:inherit;color:inherit;resize:none;overflow:hidden;overflow-wrap:break-word;word-break:break-word;box-sizing:border-box}',
     '.input-row textarea::-webkit-scrollbar{width:5px}',
     '.input-row textarea::-webkit-scrollbar-track{background:transparent}',
     '.input-row textarea::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}',
-    '.textarea-wrap{flex:1;border:1px solid #e0e0e0;border-radius:12px;background:#f8f9fa;padding:8px 14px;transition:border-color .2s,background .2s}',
+    '.textarea-wrap{flex:1;min-width:0;border:1px solid #e0e0e0;border-radius:12px;background:#f8f9fa;padding:8px 14px;transition:border-color .2s,background .2s}',
     '.textarea-wrap:focus-within{border-color:#4f7cff;background:#fff}',
     '.textarea-wrap:has(> textarea.disabled){background:#f0f0f0}',
     '.input-row textarea::placeholder{color:#bbb}',
