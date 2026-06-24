@@ -261,6 +261,22 @@
     '.input-row textarea.disabled{color:#bbb;cursor:not-allowed}',
     '@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}',
     '.row,.sys-msg{animation:fadeIn .25s ease}',
+    // --- 常用语 ---
+    '.phrases-btn-wrap{position:relative;margin-right:auto;display:flex}',
+    '.phrases-btn{background:none;border:none;font-size:12px;color:#666;cursor:pointer;padding:4px 8px;border-radius:6px;display:flex;align-items:center;gap:3px;font-family:inherit;transition:background .15s}',
+    '.phrases-btn:hover{background:#f0f2f5;color:#333}',
+    '.phrases-popup{position:absolute;bottom:calc(100% + 4px);left:0;width:260px;max-height:280px;background:#fff;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);border:1px solid #e8e8e8;display:none;flex-direction:column;z-index:100;overflow:hidden}',
+    '.phrases-popup.open{display:flex}',
+    '.phrases-popup-header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 8px;border-bottom:1px solid #f0f0f0;font-size:12px;font-weight:600;color:#333}',
+    '.phrases-settings{background:none;border:none;font-size:16px;cursor:pointer;color:#81c784;padding:2px 6px;border-radius:4px;transition:background .15s;line-height:1}',
+    '.phrases-settings:hover{background:#e8f5e9;color:#66bb6a}',
+    '.phrases-list{flex:1;overflow-y:auto;padding:4px 0}',
+    '.phrases-list::-webkit-scrollbar{width:4px}',
+    '.phrases-list::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}',
+    '.phrases-item{padding:8px 12px;font-size:12px;color:#333;cursor:pointer;line-height:1.4;word-break:break-word;transition:background .1s;border-bottom:1px solid #f5f5f5}',
+    '.phrases-item:hover{background:#f5f7ff;color:#4f7cff}',
+    '.phrases-item:last-child{border-bottom:none}',
+    '.phrases-empty{padding:20px 12px;text-align:center;font-size:12px;color:#bbb;display:block}',
   ].join('');
   root.appendChild(style);
 
@@ -280,6 +296,17 @@
     '      <div class="textarea-wrap">',
     '        <textarea rows="2" placeholder="输入消息..." id="chatInput"></textarea>',
     '        <div class="action-row">',
+    '          <div class="phrases-btn-wrap">',
+    '            <button class="phrases-btn" id="phrasesBtn">常用语</button>',
+    '            <div class="phrases-popup" id="phrasesPopup">',
+    '              <div class="phrases-popup-header">',
+    '                <span>常用语</span>',
+    '                <button class="phrases-settings" id="phrasesSettings" title="管理常用语">⚙</button>',
+    '              </div>',
+    '              <div class="phrases-list" id="phrasesList"></div>',
+    '              <div class="phrases-empty" id="phrasesEmpty">暂无常用语</div>',
+    '            </div>',
+    '          </div>',
     '          <button class="act-btn enabled" id="btnFetch">发送岗位信息</button>',
     '          <button class="act-btn enabled" id="btnResume">定制简历</button>',
     '          <button class="send" id="sendBtn">↑</button>',
@@ -302,6 +329,53 @@
   var sendBtn   = root.getElementById('sendBtn');
   var btnFetch  = root.getElementById('btnFetch');
   var btnResume = root.getElementById('btnResume');
+
+  // 常用语
+  var phrasesBtn   = root.getElementById('phrasesBtn');
+  var phrasesPopup = root.getElementById('phrasesPopup');
+  var phrasesList  = root.getElementById('phrasesList');
+  var phrasesEmpty = root.getElementById('phrasesEmpty');
+  var phrasesSettings = root.getElementById('phrasesSettings');
+
+  var PHRASES_KEY = 'commonPhrases';
+
+  function loadPhrases(cb) {
+    chrome.storage.local.get(PHRASES_KEY, function (result) {
+      cb(result[PHRASES_KEY] || []);
+    });
+  }
+
+  function renderPhrasesPopup(phrases) {
+    phrasesList.innerHTML = '';
+    if (phrases.length === 0) {
+      phrasesEmpty.style.display = 'block';
+      return;
+    }
+    phrasesEmpty.style.display = 'none';
+    phrases.forEach(function (text) {
+      var item = document.createElement('div');
+      item.className = 'phrases-item';
+      item.textContent = text;
+      item.addEventListener('click', function () {
+        inputEl.value = text;
+        autoResizeTextarea(inputEl);
+        inputEl.focus();
+        phrasesPopup.classList.remove('open');
+      });
+      phrasesList.appendChild(item);
+    });
+  }
+
+  function closePhrasesPopup() {
+    phrasesPopup.classList.remove('open');
+  }
+
+  function openPhrasesPopup() {
+    loadPhrases(function (phrases) {
+      renderPhrasesPopup(phrases);
+      phrasesPopup.classList.add('open');
+    });
+  }
 
   function addMsg(role, text) {
     var d = document.createElement('div');
@@ -787,6 +861,41 @@
     }
   });
   inputEl.addEventListener('input', function () { autoResizeTextarea(inputEl); });
+
+  // -------------------- 常用语 --------------------
+  phrasesBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (phrasesPopup.classList.contains('open')) {
+      closePhrasesPopup();
+    } else {
+      openPhrasesPopup();
+    }
+  });
+
+  phrasesSettings.addEventListener('click', function (e) {
+    e.stopPropagation();
+    chrome.runtime.sendMessage({ type: 'openPhrasesPage' });
+    closePhrasesPopup();
+  });
+
+  // Shadow DOM 内点击：不在按钮和弹窗内时关闭
+  phone.addEventListener('click', function (e) {
+    if (phrasesPopup.classList.contains('open') &&
+        !phrasesBtn.contains(e.target) &&
+        !phrasesPopup.contains(e.target)) {
+      closePhrasesPopup();
+    }
+  });
+
+  // 页面点击：点击在面板外时关闭（事件从 Shadow DOM 穿出时 target 被重定向为 host）
+  document.addEventListener('click', function (e) {
+    if (phrasesPopup.classList.contains('open')) {
+      var host = document.getElementById('boss-ai-host');
+      if (host && !host.contains(e.target)) {
+        closePhrasesPopup();
+      }
+    }
+  });
 
   // ============================================================
   // 9. 启动（先加载持久化上下文，再刷新面板）

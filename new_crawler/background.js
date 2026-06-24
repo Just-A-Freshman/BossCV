@@ -152,11 +152,17 @@
   });
 
   // ============================================================
-  // 短消息（非流式：getConfig / fetchJobDetail）
+  // 短消息（非流式：getConfig / fetchJobDetail / openPhrasesPage）
   // ============================================================
   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (msg.type === 'getConfig') {
       getConfig().then(function (cfg) { sendResponse({ ok: true, config: cfg }); });
+      return true;
+    }
+
+    if (msg.type === 'openPhrasesPage') {
+      chrome.tabs.create({ url: chrome.runtime.getURL('phrases.html') });
+      sendResponse({ ok: true });
       return true;
     }
 
