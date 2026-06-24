@@ -43,6 +43,11 @@
     var jobTitle = document.querySelector('.job-title')?.textContent?.trim() || '';
     var salary   = document.querySelector('.badge')?.textContent?.trim() || '';
 
+    // ---- 岗位元信息（属地/工作时间/学历） ----
+    var city   = document.querySelector('a.text-desc.text-city')?.textContent?.trim() || '';
+    var workSchedule = document.querySelector('span.text-desc.text-experiece')?.textContent?.trim() || '';
+    var education    = document.querySelector('span.text-desc.text-degree')?.textContent?.trim() || '';
+
     // 公司：严格按 extract_job_detail.js 顺序
     var infoEl = document.querySelector('.info');
     var companyName = '';
@@ -121,6 +126,9 @@
       bizInfo:     bizInfo.slice(0, 10),
       address:     address || '(未找到)',
       url:         location.href,
+      city:        city || '(未找到)',
+      workSchedule: workSchedule || '(未找到)',
+      education:   education || '(未找到)',
     };
   }
 
