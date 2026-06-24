@@ -17,6 +17,14 @@
 
   // 从DOM提取当前活跃对话的唯一标识（boss名称/岗位），用于区分不同boss
   function getConversationTag() {
+    // 优先使用 ka 岗位详情标识（不受筛选器"全部/仅沟通"影响）
+    var jobEl = document.querySelector(
+      '[class*="active"] [ka="geek_chat_job_detail"],[class*="selected"] [ka="geek_chat_job_detail"]'
+    ) || document.querySelector('[ka="geek_chat_job_detail"]');
+    if (jobEl) {
+      var j = jobEl.textContent.replace(/\s+/g, '').trim().slice(0, 40);
+      if (j && j.length > 2) return j;
+    }
     // 1. 找侧边栏中被选中的对话项
     var chatItem = document.querySelector(
       '[class*="active"] [class*="title"],[class*="active"] [class*="name"],' +
@@ -41,14 +49,6 @@
     if (headerEl && headerEl.offsetWidth > 0) {
       var h = headerEl.textContent.replace(/\s+/g, '').trim().slice(0, 40);
       if (h && h.length > 2 && !/请选择|暂无|选择会话|聊天/.test(h)) return h;
-    }
-    // 3. 找ka岗位详情——只取选中项内的
-    var jobEl = document.querySelector(
-      '[class*="active"] [ka="geek_chat_job_detail"],[class*="selected"] [ka="geek_chat_job_detail"]'
-    ) || document.querySelector('[ka="geek_chat_job_detail"]');
-    if (jobEl) {
-      var j = jobEl.textContent.replace(/\s+/g, '').trim().slice(0, 40);
-      if (j && j.length > 2) return j;
     }
     return '';
   }
