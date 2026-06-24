@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 面试助手 设置</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 360px;
+      font-family: -apple-system, "Microsoft YaHei", "PingFang SC", sans-serif;
+      font-size: 13px;
+      color: #333;
+      background: #f5f6f8;
+    }
+    .header {
+      background: linear-gradient(135deg, #4f7cff, #3b66e0);
+      color: #fff;
+      padding: 18px 20px 14px;
+      border-radius: 0 0 16px 16px;
+    }
+    .header h1 { font-size: 17px; font-weight: 600; letter-spacing: 0.5px; }
+    .header p { font-size: 11px; opacity: 0.8; margin-top: 4px; }
+
+    .body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+    .section { background: #fff; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+    .section-title { font-size: 12px; font-weight: 600; color: #666; margin-bottom: 10px; letter-spacing: 0.3px; }
+
+    .field + .field { margin-top: 12px; }
+    .field label { display: block; font-size: 11px; color: #888; margin-bottom: 4px; font-weight: 500; }
+    .field input, .field textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      background: #fafbfc;
+      transition: border-color .2s, background .2s;
+    }
+    .field input:focus, .field textarea:focus {
+      border-color: #4f7cff;
+      background: #fff;
+    }
+    .field input::placeholder, .field textarea::placeholder { color: #bbb; }
+    .field textarea { resize: vertical; min-height: 60px; line-height: 1.5; }
+
+    .btn-row { display: flex; gap: 10px; }
+    .btn {
+      flex: 1;
+      height: 38px;
+      border: none;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .15s;
+      font-family: inherit;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: #4f7cff; color: #fff; }
+    .btn-primary:hover { background: #3b66e0; }
+    .btn-secondary { background: #f0f2f5; color: #666; }
+    .btn-secondary:hover { background: #e5e6ea; }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #999;
+    }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #ddd;
+      flex-shrink: 0;
+    }
+    .status-dot.saved { background: #52c41a; }
+    .status-dot.error { background: #ff4d4f; }
+    .status-dot.saving { background: #faad14; animation: pulse .8s infinite; }
+    @keyframes pulse { 50% { opacity: 0.4; } }
+
+    .footer { text-align: center; font-size: 10px; color: #c0c4cc; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🤖 AI 面试助手</h1>
+    <p>配置大模型接口，开启智能沟通分析</p>
+  </div>
+
+  <div class="body">
+    <div class="section">
+      <div class="section-title">大模型 API 配置</div>
+      <div class="field">
+        <label for="apiBaseUrl">API Base URL</label>
+        <input type="text" id="apiBaseUrl" placeholder="https://api.openai.com/v1" />
+      </div>
+      <div class="field">
+        <label for="apiKey">API Key</label>
+        <input type="password" id="apiKey" placeholder="sk-..." />
+      </div>
+      <div class="field">
+        <label for="model">Model</label>
+        <input type="text" id="model" placeholder="gpt-4o / claude-3.5-sonnet / deepseek-chat" />
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">系统提示词（可选）</div>
+      <div class="field">
+        <textarea id="systemPrompt" placeholder="你是一个面试助手，帮助用户分析岗位要求并建议沟通策略..."></textarea>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveBtn">保存配置</button>
+      <button class="btn btn-secondary" id="testBtn">测试连接</button>
+    </div>
+
+    <div class="status-bar" id="statusBar">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">就绪</span>
+    </div>
+
+    <div class="footer">BOSS直聘 AI 面试助手 v1.0.0</div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
