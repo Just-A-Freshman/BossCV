@@ -10,5 +10,7 @@ explore*
 docs/
 
 playwright.config.ts
+CLAUDE.md
+.claude/
 
 /debug-*
