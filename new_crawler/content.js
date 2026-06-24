@@ -8,7 +8,47 @@
   // ============================================================
   function getChatId() {
     var m = location.pathname.match(/\/chat\/([^/?#]+)/) || location.hash.match(/chatId[=:]([^&]+)/);
-    return m ? m[1] : '__default__';
+    var base = m ? m[1] : '__default__';
+    // 附加当前对话的boss/岗位标识，每个boss有独立的AI对话
+    var tag = getConversationTag();
+    if (tag && tag !== base) return base + '_' + tag.replace(/[^a-zA-Z0-9一-鿿]/g, '').slice(0, 40);
+    return base;
+  }
+
+  // 从DOM提取当前活跃对话的唯一标识（boss名称/岗位），用于区分不同boss
+  function getConversationTag() {
+    // 1. 找侧边栏中被选中的对话项
+    var chatItem = document.querySelector(
+      '[class*="active"] [class*="title"],[class*="active"] [class*="name"],' +
+      '[class*="selected"] [class*="title"],[class*="selected"] [class*="name"],' +
+      '[class*="current"] [class*="title"],[class*="current"] [class*="name"]'
+    );
+    if (!chatItem) {
+      chatItem = document.querySelector(
+        '[class*="chat-item"].active,[class*="chat-item"].selected,' +
+        '[class*="geek-item"].active,[class*="geek-item"].selected'
+      );
+    }
+    if (chatItem) {
+      var t = chatItem.textContent.replace(/\s+/g, '').trim().slice(0, 40);
+      if (t && t.length > 2) return t;
+    }
+    // 2. 找聊天头部区域（含boss姓名）
+    var headerEl = document.querySelector(
+      '[class*="chat-header"],[class*="dialog-header"],' +
+      '[class*="im-header"],[class*="message-header"]'
+    );
+    if (headerEl) {
+      var h = headerEl.textContent.replace(/\s+/g, '').trim().slice(0, 40);
+      if (h && h.length > 2) return h;
+    }
+    // 3. 找ka岗位详情
+    var jobEl = document.querySelector('[ka="geek_chat_job_detail"]');
+    if (jobEl) {
+      var j = jobEl.textContent.replace(/\s+/g, '').trim().slice(0, 40);
+      if (j && j.length > 2) return j;
+    }
+    return '';
   }
 
   // ============================================================
@@ -31,13 +71,55 @@
     return getCtx(getChatId());
   }
 
+  // ============================================================
+  // 1b. 持久化：保存/加载对话上下文到 chrome.storage.local
+  // ============================================================
+  function saveCurrentCtx() {
+    var chatId = getChatId();
+    var ctx = contexts[chatId];
+    if (!ctx) return;
+    var key = 'chatCtx_' + chatId;
+    chrome.storage.local.set({ [key]: {
+      jobFetched: ctx.jobFetched,
+      messages: ctx.messages.slice(-100),
+      systemPrompt: ctx.systemPrompt,
+    }});
+  }
+
+  function loadCurrentCtx(chatId, callback) {
+    var key = 'chatCtx_' + chatId;
+    chrome.storage.local.get(key, function (result) {
+      var data = result[key];
+      if (data) {
+        var ctx = getCtx(chatId);
+        ctx.jobFetched = data.jobFetched || false;
+        ctx.messages = data.messages || [];
+        ctx.systemPrompt = data.systemPrompt || '';
+      }
+      if (callback) callback();
+    });
+  }
+
+  var loadedChatIds = {};
   var lastChatId = null;
 
   function pollChatChange() {
     var cur = getChatId();
     if (cur !== lastChatId) {
+      // 切换对话时清除 main-world 缓存的搜索结果
+      var oldHelper = document.querySelector('#boss-ai-mw-helper');
+      if (oldHelper) oldHelper.remove();
+      window.__bossFindResult = undefined;
+
       lastChatId = cur;
-      refreshPanel();
+      if (!loadedChatIds[cur]) {
+        loadCurrentCtx(cur, function () {
+          loadedChatIds[cur] = true;
+          refreshPanel();
+        });
+      } else {
+        refreshPanel();
+      }
     }
   }
 
@@ -280,7 +362,7 @@
     addMsg('ai', '你好！点击下方「发送岗位信息」，我可以帮你分析当前岗位的要求，并建议沟通策略。');
 
     if (ctx.jobFetched) {
-      var jobInfoMsg = ctx.messages.find(function (m) { return m.role === 'user' && (m.content.startsWith('【岗位信息简报】') || m.content.startsWith('【页面岗位')); });
+      var jobInfoMsg = ctx.messages.find(function (m) { return m.role === 'user' && (m.content.startsWith('```') || m.content.startsWith('【岗位基本信息】')); });
       if (jobInfoMsg) addMsg('user', jobInfoMsg.content);
       var aiReply = ctx.messages.find(function (m) { return m.role === 'assistant'; });
       if (aiReply) addMsg('ai', aiReply.content);
@@ -351,6 +433,7 @@
       // 显示用户消息
       addMsg('user', userMsg);
       ctx.messages.push({ role: 'user', content: userMsg });
+      saveCurrentCtx();
 
       // 创建流式气泡
       var ctrl = createStreamBubble();
@@ -370,6 +453,7 @@
         } else if (msg.type === 'done') {
           ctrl.finalize(msg.time);
           ctx.messages.push({ role: 'assistant', content: replyBuffer });
+          saveCurrentCtx();
           streaming = false;
           enableInput();
           port.disconnect();
@@ -393,9 +477,9 @@
   // 注入 main-world 辅助脚本（通过 web_accessible_resources 绕过 CSP）
   function injectMainWorldHelper() {
     return new Promise(function (resolve, reject) {
-      // 防止重复注入
+      // 防止重复注入；如有缓存数据直接复用
       if (document.querySelector('#boss-ai-mw-helper')) {
-        resolve();
+        resolve(window.__bossFindResult);
         return;
       }
 
@@ -635,6 +719,7 @@
             // 以用户身份自动发送岗位信息
             addMsg('user', jobInfo);
             ctx.messages.push({ role: 'user', content: jobInfo });
+            saveCurrentCtx();
 
             // 调用 AI
             var messages = [
@@ -658,6 +743,7 @@
               } else if (msg.type === 'done') {
                 ctrl.finalize(msg.time);
                 ctx.messages.push({ role: 'assistant', content: replyBuffer });
+                saveCurrentCtx();
                 streaming = false;
                 enableInput();
                 port.disconnect();
@@ -733,9 +819,13 @@
   });
 
   // ============================================================
-  // 9. 启动
+  // 9. 启动（先加载持久化上下文，再刷新面板）
   // ============================================================
-  lastChatId = getChatId();
-  refreshPanel();
-  console.log('[BOSS AI] 面板已注入，chatId=' + lastChatId);
+  var initialChatId = getChatId();
+  loadCurrentCtx(initialChatId, function () {
+    loadedChatIds[initialChatId] = true;
+    lastChatId = initialChatId;
+    refreshPanel();
+    console.log('[BOSS AI] 面板已注入，chatId=' + lastChatId);
+  });
 })();

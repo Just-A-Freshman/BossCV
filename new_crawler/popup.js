@@ -113,6 +113,25 @@
     if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') saveConfig();
   });
 
+  // ============================================================
+  // 清空所有对话记录
+  // ============================================================
+  var clearChatBtn = document.getElementById('clearChatBtn');
+  clearChatBtn.addEventListener('click', function () {
+    if (!confirm('确定清空所有 boss 的对话记录吗？此操作不可撤销。')) return;
+    setStatus('清空中...', 'saving');
+    chrome.storage.local.get(null, function (items) {
+      var keysToRemove = Object.keys(items).filter(function (k) { return k.startsWith('chatCtx_'); });
+      if (keysToRemove.length === 0) {
+        setStatus('没有对话记录需要清空', 'saved');
+        return;
+      }
+      chrome.storage.local.remove(keysToRemove, function () {
+        setStatus('✅ 已清空 ' + keysToRemove.length + ' 条对话记录', 'saved');
+      });
+    });
+  });
+
   // 启动
   loadConfig();
 })();
