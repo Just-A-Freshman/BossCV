@@ -13,15 +13,6 @@
       color: #333;
       background: #f5f6f8;
     }
-    .header {
-      background: linear-gradient(135deg, #4f7cff, #3b66e0);
-      color: #fff;
-      padding: 18px 20px 14px;
-      border-radius: 0 0 16px 16px;
-    }
-    .header h1 { font-size: 17px; font-weight: 600; letter-spacing: 0.5px; }
-    .header p { font-size: 11px; opacity: 0.8; margin-top: 4px; }
-
     .body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
 
     .section { background: #fff; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
@@ -86,20 +77,58 @@
     @keyframes pulse { 50% { opacity: 0.4; } }
 
     .footer { text-align: center; font-size: 10px; color: #c0c4cc; margin-top: 4px; }
+
+    /* 下拉框+datalist 样式 */
+    .combo-wrap { position: relative; width: 100%; }
+    .combo-wrap select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      background: #fafbfc;
+      transition: border-color .2s, background .2s;
+      appearance: auto;
+      cursor: pointer;
+      color: #333;
+    }
+    .combo-wrap select:focus { border-color: #4f7cff; background: #fff; }
+    .combo-wrap select option { font-size: 12px; padding: 4px; }
+    .combo-wrap input {
+      margin-top: 6px;
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      background: #fafbfc;
+      transition: border-color .2s, background .2s;
+    }
+    .combo-wrap input:focus { border-color: #4f7cff; background: #fff; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>🤖 AI 面试助手</h1>
-    <p>配置大模型接口，开启智能沟通分析</p>
-  </div>
-
-  <div class="body">
+  <div class="body" style="padding-top: 20px;">
     <div class="section">
       <div class="section-title">大模型 API 配置</div>
       <div class="field">
         <label for="apiBaseUrl">API Base URL</label>
-        <input type="text" id="apiBaseUrl" placeholder="https://api.openai.com/v1" />
+        <div class="combo-wrap">
+          <select id="baseUrlSelect">
+            <option value="">-- 选择预设 --</option>
+            <option value="https://api.openai.com/v1">OpenAI</option>
+            <option value="https://api.deepseek.com/v1">DeepSeek</option>
+            <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">阿里通义千问</option>
+            <option value="https://api.siliconflow.cn/v1">SiliconFlow</option>
+            <option value="https://api.moonshot.cn/v1">Kimi</option>
+            <option value="https://open.bigmodel.cn/api/paas/v4">智谱GLM</option>
+          </select>
+          <input type="text" id="apiBaseUrl" placeholder="或自行输入 API Base URL" />
+        </div>
       </div>
       <div class="field">
         <label for="apiKey">API Key</label>

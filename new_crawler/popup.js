@@ -2,9 +2,10 @@
   'use strict';
 
   // DOM 引用
-  var apiBaseUrl  = document.getElementById('apiBaseUrl');
-  var apiKey      = document.getElementById('apiKey');
-  var model       = document.getElementById('model');
+  var apiBaseUrl   = document.getElementById('apiBaseUrl');
+  var baseUrlSelect = document.getElementById('baseUrlSelect');
+  var apiKey       = document.getElementById('apiKey');
+  var model        = document.getElementById('model');
   var systemPrompt = document.getElementById('systemPrompt');
   var saveBtn     = document.getElementById('saveBtn');
   var testBtn     = document.getElementById('testBtn');
@@ -107,6 +108,14 @@
   // ============================================================
   saveBtn.addEventListener('click', saveConfig);
   testBtn.addEventListener('click', testConnection);
+
+  // 预设下拉选中后自动填充 Base URL
+  baseUrlSelect.addEventListener('change', function () {
+    if (this.value) {
+      apiBaseUrl.value = this.value;
+      this.value = ''; // 重置为占位选项，允许重新选择
+    }
+  });
 
   // Enter 快捷保存（不在 textarea 内触发）
   document.addEventListener('keydown', function (e) {
