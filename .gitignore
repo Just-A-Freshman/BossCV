@@ -4,7 +4,7 @@ projects/
 */data/config.json
 */data/jobs.json
 */data/progress.json
-
+explore*
 
 .github/
 docs/
