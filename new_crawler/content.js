@@ -114,32 +114,6 @@
   root.appendChild(phone);
   document.body.appendChild(host);
 
-  // --- 外部开关按钮（始终可见）---
-  var toggle = document.createElement('div');
-  toggle.id = 'boss-ai-toggle';
-  toggle.textContent = '◀';
-  toggle.style.cssText = [
-    'position:fixed',
-    'top:' + (TOP + 20) + 'px',
-    'right:10px',
-    'width:32px',
-    'height:60px',
-    'background:#e8eaed',
-    'border-radius:8px 0 0 8px',
-    'color:#666',
-    'font-size:14px',
-    'cursor:pointer',
-    'z-index:999999',
-    'display:flex',
-    'align-items:center',
-    'justify-content:center',
-    'transition:right 0.3s,opacity 0.3s',
-    'user-select:none',
-    'border:none',
-    'font-family:sans-serif',
-  ].join(';');
-  document.body.appendChild(toggle);
-
   // ============================================================
   // 3. DOM 引用 & 事件
   // ============================================================
@@ -164,15 +138,6 @@
     canvasEl.appendChild(d);
     canvasEl.scrollTop = canvasEl.scrollHeight;
   }
-
-  // --- 面板展开/收起 ---
-  var visible = true;
-  toggle.onclick = function () {
-    visible = !visible;
-    phone.style.display = visible ? '' : 'none';
-    toggle.textContent = visible ? '◀' : '▶';
-    toggle.style.right = visible ? '10px' : '10px';
-  };
 
   // --- 发送岗位信息 ---
   btnFetch.addEventListener('click', function () {
