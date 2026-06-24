@@ -105,25 +105,30 @@
   var loadedChatIds = {};
   var lastChatId = null;
 
+  // 对话切换（由 MutationObserver 快速响应，不含可见性检测）
+  function reloadChat() {
+    var cur = getChatId();
+    if (cur === lastChatId) return;
+    // 切换对话时清除 main-world 缓存的搜索结果
+    var oldHelper = document.querySelector('#boss-ai-mw-helper');
+    if (oldHelper) oldHelper.remove();
+    window.__bossFindResult = undefined;
+
+    lastChatId = cur;
+    if (!loadedChatIds[cur]) {
+      loadCurrentCtx(cur, function () {
+        loadedChatIds[cur] = true;
+        refreshPanel();
+      });
+    } else {
+      refreshPanel();
+    }
+  }
+
+  // 完整轮询（含可见性检测，800ms 缓冲确保 DOM 稳定）
   function pollChatChange() {
     setPanelVisible(hasActiveChat());
-    var cur = getChatId();
-    if (cur !== lastChatId) {
-      // 切换对话时清除 main-world 缓存的搜索结果
-      var oldHelper = document.querySelector('#boss-ai-mw-helper');
-      if (oldHelper) oldHelper.remove();
-      window.__bossFindResult = undefined;
-
-      lastChatId = cur;
-      if (!loadedChatIds[cur]) {
-        loadCurrentCtx(cur, function () {
-          loadedChatIds[cur] = true;
-          refreshPanel();
-        });
-      } else {
-        refreshPanel();
-      }
-    }
+    reloadChat();
   }
 
   // ============================================================
@@ -142,7 +147,8 @@
     host.style.display = visible ? '' : 'none';
   }
 
-  var observer = new MutationObserver(function () { pollChatChange(); });
+  // MutationObserver 只处理对话切换，不做可见性检测（避免 DOM 未就绪时误判）
+  var observer = new MutationObserver(function () { reloadChat(); });
   observer.observe(document.body, { childList: true, subtree: true });
   setInterval(pollChatChange, 800);
 
@@ -266,9 +272,8 @@
   ].join('\n');
   root.appendChild(phone);
   document.body.appendChild(host);
-
-  // 初始可见性检测（有活跃对话时即时显示）
-  setPanelVisible(hasActiveChat());
+  // 不在此处立即检测可见性——此时 DOM 可能尚未渲染占位文案，
+  // hasActiveChat() 可能误判。由下方的 MutationObserver + setInterval 异步处理。
 
   // ============================================================
   // 4. DOM 引用 & 基础方法
