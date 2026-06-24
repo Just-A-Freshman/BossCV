@@ -228,20 +228,25 @@
     '.sys-msg{align-self:center;font-size:12px;color:#999;padding:6px 0;font-family:-apple-system,"Microsoft YaHei",sans-serif}',
     '.sys-msg.error{color:#ff4d4f}',
     '.bottom{background:#fff;border-top:1px solid #eee;padding:10px 12px}',
-    '.input-row{display:flex;align-items:center;gap:8px}',
-    '.input-row input{flex:1;height:36px;border:1px solid #e0e0e0;border-radius:18px;padding:0 14px;font-size:13px;font-family:-apple-system,"Microsoft YaHei","PingFang SC",sans-serif;outline:none;background:#f8f9fa;transition:border-color .2s;box-sizing:border-box}',
-    '.input-row input:focus{border-color:#4f7cff;background:#fff}',
-    '.input-row input::placeholder{color:#bbb}',
-    '.input-row .send{width:36px;height:36px;border-radius:50%;border:none;background:#4f7cff;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0}',
-    '.input-row .send:active{transform:scale(0.92)}',
-    '.input-row .send:hover{background:#3b66e0}',
-    '.actions{display:flex;justify-content:center;gap:24px;margin-top:10px}',
+    '.input-row{display:flex;align-items:flex-start;gap:8px}',
+    '.input-row textarea{display:block;width:100%;border:none;outline:none;background:transparent;padding:0;margin:0;font:inherit;color:inherit;resize:none;overflow-y:hidden;box-sizing:border-box}',
+    '.input-row textarea::-webkit-scrollbar{width:5px}',
+    '.input-row textarea::-webkit-scrollbar-track{background:transparent}',
+    '.input-row textarea::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}',
+    '.textarea-wrap{flex:1;border:1px solid #e0e0e0;border-radius:12px;background:#f8f9fa;padding:8px 14px;transition:border-color .2s,background .2s}',
+    '.textarea-wrap:focus-within{border-color:#4f7cff;background:#fff}',
+    '.textarea-wrap:has(> textarea.disabled){background:#f0f0f0}',
+    '.input-row textarea::placeholder{color:#bbb}',
+    '.action-row{display:flex;justify-content:flex-end;align-items:center;gap:6px;padding:6px 0 0}',
+    '.action-row .send{width:32px;height:32px;border-radius:50%;border:none;background:#4f7cff;color:#fff;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0}',
+    '.action-row .send:active{transform:scale(0.92)}',
+    '.action-row .send:hover{background:#3b66e0}',
     '.act-btn{background:none;border:none;font-size:13px;cursor:pointer;padding:4px 6px;font-family:-apple-system,"Microsoft YaHei","PingFang SC",sans-serif;transition:color .15s}',
     '.act-btn.enabled{color:#4f7cff}',
     '.act-btn.enabled:hover{color:#3b66e0}',
     '.act-btn.disabled{color:#c0c4cc;cursor:not-allowed}',
     '.act-btn .badge{font-size:11px;margin-left:2px}',
-    '.input-row input.disabled{background:#f0f0f0;color:#bbb;cursor:not-allowed}',
+    '.input-row textarea.disabled{color:#bbb;cursor:not-allowed}',
     '@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}',
     '.row,.sys-msg{animation:fadeIn .25s ease}',
   ].join('');
@@ -260,12 +265,14 @@
     '  </div>',
     '  <div class="bottom">',
     '    <div class="input-row">',
-    '      <input type="text" placeholder="输入消息..." id="chatInput" />',
-    '      <button class="send" id="sendBtn">↑</button>',
-    '    </div>',
-    '    <div class="actions">',
-    '      <button class="act-btn enabled" id="btnFetch">发送岗位信息</button>',
-    '      <button class="act-btn enabled" id="btnResume">定制简历</button>',
+    '      <div class="textarea-wrap">',
+    '        <textarea rows="2" placeholder="输入消息..." id="chatInput"></textarea>',
+    '        <div class="action-row">',
+    '          <button class="act-btn enabled" id="btnFetch">发送岗位信息</button>',
+    '          <button class="act-btn enabled" id="btnResume">定制简历</button>',
+    '          <button class="send" id="sendBtn">↑</button>',
+    '        </div>',
+    '      </div>',
     '    </div>',
     '  </div>',
     '</div>',
@@ -306,6 +313,17 @@
 
   function clearCanvas() {
     canvasEl.innerHTML = '';
+  }
+
+  // textarea 自适应高度（默认 2 行，最高 9 行）
+  function autoResizeTextarea(el) {
+    var minH = 56;  // 2 行 ≈ 56px (含 padding)
+    var maxH = 196; // 9 行 ≈ 196px
+    el.style.height = 'auto';
+    var scrollH = el.scrollHeight;
+    var target = Math.max(minH, Math.min(scrollH, maxH));
+    el.style.height = target + 'px';
+    el.style.overflowY = scrollH > maxH ? 'auto' : 'hidden';
   }
 
   // ============================================================
@@ -435,6 +453,7 @@
     inputEl.className = 'disabled';
     inputEl.disabled = true;
     inputEl.value = '';
+    autoResizeTextarea(inputEl);
     inputEl.placeholder = placeholder || 'AI 回复中...';
   }
 
@@ -442,6 +461,7 @@
     inputEl.className = '';
     inputEl.disabled = false;
     inputEl.value = '';
+    autoResizeTextarea(inputEl);
     inputEl.placeholder = '输入消息...';
     inputEl.focus();
   }
@@ -740,6 +760,7 @@
     var t = inputEl.value.trim();
     if (!t) return;
     inputEl.value = '';
+    autoResizeTextarea(inputEl);
     askAI(t);
   }
 
@@ -750,6 +771,7 @@
       handleSend();
     }
   });
+  inputEl.addEventListener('input', function () { autoResizeTextarea(inputEl); });
 
   // ============================================================
   // 9. 启动（先加载持久化上下文，再刷新面板）
