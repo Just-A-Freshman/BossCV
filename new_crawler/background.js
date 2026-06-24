@@ -152,7 +152,7 @@
   });
 
   // ============================================================
-  // 短消息（非流式：getConfig / testConnection）
+  // 短消息（非流式：getConfig / testConnection / saveUrls）
   // ============================================================
   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (msg.type === 'getConfig') {
@@ -180,6 +180,70 @@
           sendResponse({ ok: true });
         })
         .catch(function (e) { sendResponse({ ok: false, error: e.message }); });
+      return true;
+    }
+
+    if (msg.type === 'saveUrls') {
+      var content = msg.urls.join('\n');
+      var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      var reader = new FileReader();
+      reader.onload = function () {
+        var dataUrl = reader.result;
+        var filename = 'job-urls-' + Date.now() + '.txt';
+        chrome.downloads.download({
+          url: dataUrl,
+          filename: filename,
+          saveAs: true,
+        }, function (downloadId) {
+          if (chrome.runtime.lastError) {
+            sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+          } else {
+            sendResponse({ ok: true, filename: filename });
+          }
+        });
+      };
+      reader.readAsDataURL(blob);
+      return true;
+    }
+
+    // ============================================================
+    // 岗位详情获取：打开隐藏标签页 → 读取 DOM → 返回数据
+    // ============================================================
+    if (msg.type === 'fetchJobDetail') {
+      var jobUrl = msg.url;
+      var chatTabId = sender.tab ? sender.tab.id : null;
+
+      // 存映射：detailTabUrl → { chatTabId, resolve }
+      var detailTabId = null;
+
+      // 监听详情页发来的数据
+      var timeoutId = setTimeout(function () {
+        chrome.runtime.onMessage.removeListener(detailHandler);
+        if (detailTabId) chrome.tabs.remove(detailTabId);
+        sendResponse({ ok: false, error: '获取岗位详情超时' });
+      }, 20000);
+
+      var detailHandler = function (detailMsg, detailSender) {
+        if (detailMsg.type === 'jobDetailData' && detailSender.tab && detailSender.tab.id === detailTabId) {
+          clearTimeout(timeoutId);  // 取消超时
+          // 转发数据到聊天页
+          if (chatTabId) {
+            chrome.tabs.sendMessage(chatTabId, { type: 'jobDetailReady', data: detailMsg.data });
+          }
+          // 关闭详情页
+          if (detailTabId) chrome.tabs.remove(detailTabId);
+          // 清理
+          chrome.runtime.onMessage.removeListener(detailHandler);
+          sendResponse({ ok: true });
+        }
+      };
+      chrome.runtime.onMessage.addListener(detailHandler);
+
+      // 打开隐藏标签页
+      chrome.tabs.create({ url: jobUrl, active: false }, function (tab) {
+        detailTabId = tab.id;
+      });
+
       return true;
     }
   });

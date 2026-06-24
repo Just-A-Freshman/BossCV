@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "description": "在BOSS直聘聊天页面右侧提供AI助手面板，帮助分析岗位信息和沟通策略",
   "permissions": [
-    "storage"
+    "storage",
+    "downloads"
   ],
   "host_permissions": [
     "https://www.zhipin.com/*"
@@ -16,10 +17,19 @@
     "default_popup": "popup.html",
     "default_title": "AI 面试助手 设置"
   },
+  "web_accessible_resources": [{
+    "resources": ["main-world-helper.js"],
+    "matches": ["https://www.zhipin.com/*"]
+  }],
   "content_scripts": [
     {
       "matches": ["https://www.zhipin.com/*"],
       "js": ["content.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://www.zhipin.com/job_detail/*"],
+      "js": ["detail-page-reader.js"],
       "run_at": "document_end"
     }
   ]
