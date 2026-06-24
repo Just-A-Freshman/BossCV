@@ -152,57 +152,11 @@
   });
 
   // ============================================================
-  // 短消息（非流式：getConfig / testConnection / saveUrls）
+  // 短消息（非流式：getConfig / fetchJobDetail）
   // ============================================================
   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (msg.type === 'getConfig') {
       getConfig().then(function (cfg) { sendResponse({ ok: true, config: cfg }); });
-      return true;
-    }
-
-    if (msg.type === 'testConnection') {
-      var url = (msg.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '') + '/chat/completions';
-      fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': 'Bearer ' + msg.apiKey,
-        },
-        body: JSON.stringify({
-          model:    msg.model,
-          messages: [{ role: 'user', content: '回复"ok"即可' }],
-          max_tokens: 16,
-          stream: false,
-        }),
-      })
-        .then(function (r) {
-          if (!r.ok) return r.json().then(function (e) { throw new Error(e.error?.message || 'HTTP ' + r.status); });
-          sendResponse({ ok: true });
-        })
-        .catch(function (e) { sendResponse({ ok: false, error: e.message }); });
-      return true;
-    }
-
-    if (msg.type === 'saveUrls') {
-      var content = msg.urls.join('\n');
-      var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-      var reader = new FileReader();
-      reader.onload = function () {
-        var dataUrl = reader.result;
-        var filename = 'job-urls-' + Date.now() + '.txt';
-        chrome.downloads.download({
-          url: dataUrl,
-          filename: filename,
-          saveAs: true,
-        }, function (downloadId) {
-          if (chrome.runtime.lastError) {
-            sendResponse({ ok: false, error: chrome.runtime.lastError.message });
-          } else {
-            sendResponse({ ok: true, filename: filename });
-          }
-        });
-      };
-      reader.readAsDataURL(blob);
       return true;
     }
 

@@ -4,8 +4,7 @@
   "version": "1.0.0",
   "description": "在BOSS直聘聊天页面右侧提供AI助手面板，帮助分析岗位信息和沟通策略",
   "permissions": [
-    "storage",
-    "downloads"
+    "storage"
   ],
   "host_permissions": [
     "https://www.zhipin.com/*"

@@ -33,17 +33,19 @@
       var t = chatItem.textContent.replace(/\s+/g, '').trim().slice(0, 40);
       if (t && t.length > 2) return t;
     }
-    // 2. 找聊天头部区域（含boss姓名）
+    // 2. 找聊天头部区域——排除占位文案
     var headerEl = document.querySelector(
       '[class*="chat-header"],[class*="dialog-header"],' +
       '[class*="im-header"],[class*="message-header"]'
     );
-    if (headerEl) {
+    if (headerEl && headerEl.offsetWidth > 0) {
       var h = headerEl.textContent.replace(/\s+/g, '').trim().slice(0, 40);
-      if (h && h.length > 2) return h;
+      if (h && h.length > 2 && !/请选择|暂无|选择会话|聊天/.test(h)) return h;
     }
-    // 3. 找ka岗位详情
-    var jobEl = document.querySelector('[ka="geek_chat_job_detail"]');
+    // 3. 找ka岗位详情——只取选中项内的
+    var jobEl = document.querySelector(
+      '[class*="active"] [ka="geek_chat_job_detail"],[class*="selected"] [ka="geek_chat_job_detail"]'
+    ) || document.querySelector('[ka="geek_chat_job_detail"]');
     if (jobEl) {
       var j = jobEl.textContent.replace(/\s+/g, '').trim().slice(0, 40);
       if (j && j.length > 2) return j;
@@ -104,6 +106,7 @@
   var lastChatId = null;
 
   function pollChatChange() {
+    setPanelVisible(hasActiveChat());
     var cur = getChatId();
     if (cur !== lastChatId) {
       // 切换对话时清除 main-world 缓存的搜索结果
@@ -123,22 +126,44 @@
     }
   }
 
+  // ============================================================
+  // 1c. 检测当前是否有活跃对话（未选会话时隐藏AI面板）
+  // ============================================================
+  function hasActiveChat() {
+    // BOSS直聘：无选中对话时固定显示此占位文案
+    return document.body.textContent.indexOf('与您进行过沟通的 Boss 都会在左侧列表中显示') === -1;
+  }
+
+  var panelActive = false;
+
+  function setPanelVisible(visible) {
+    if (visible === panelActive || !host) return;
+    panelActive = visible;
+    host.style.display = visible ? '' : 'none';
+  }
+
   var observer = new MutationObserver(function () { pollChatChange(); });
   observer.observe(document.body, { childList: true, subtree: true });
   setInterval(pollChatChange, 800);
 
   // ============================================================
-  // 2. 挤压页面
+  // 2. 挤压页面（仅面板可见时生效）
   // ============================================================
   (function squeezePage() {
-    var s = document.createElement('style');
-    s.id = 'boss-ai-squeeze';
-    s.textContent = 'html,body{overflow-x:hidden!important}';
-    document.head.appendChild(s);
-
     setInterval(function () {
       var wrap = document.querySelector('#wrap');
       if (!wrap) return;
+
+      if (!panelActive) {
+        // 无活跃对话时恢复页面原始布局
+        wrap.style.removeProperty('width');
+        wrap.style.removeProperty('margin-left');
+        wrap.style.removeProperty('margin-right');
+        wrap.style.removeProperty('max-width');
+        wrap.style.removeProperty('min-width');
+        return;
+      }
+
       var squeeze = Math.max(200, window.innerWidth - 1020);
       squeeze = Math.min(squeeze, 620);
 
@@ -164,6 +189,7 @@
 
   var host = document.createElement('div');
   host.id = 'boss-ai-host';
+  host.style.display = 'none'; // 初始隐藏，pollChatChange 会在有活跃对话时自动显示
   var root = host.attachShadow({ mode: 'closed' });
 
   var style = document.createElement('style');
@@ -240,6 +266,9 @@
   ].join('\n');
   root.appendChild(phone);
   document.body.appendChild(host);
+
+  // 初始可见性检测（有活跃对话时即时显示）
+  setPanelVisible(hasActiveChat());
 
   // ============================================================
   // 4. DOM 引用 & 基础方法
@@ -471,7 +500,7 @@
   }
 
   // ============================================================
-  // 7. 收集岗位 URL（调试阶段 — 通过 main-world 脚本搜索 Vue 数据）
+  // 7. 获取岗位信息（提取 ID → 隐藏标签页 → 详情 → AI）
   // ============================================================
 
   // 注入 main-world 辅助脚本（通过 web_accessible_resources 绕过 CSP）
@@ -508,103 +537,8 @@
     });
   }
 
-  function collectJobUrls() {
-    var lines = [];
-    var rawIds = [];
-
-    // ---- 7a. 搜索所有 <a> 标签 ----
-    document.querySelectorAll('a[href]').forEach(function (a) {
-      var href = a.href;
-      if (!href || href === '#' || href.startsWith('javascript:')) return;
-      if (href.includes('/job_detail/')) {
-        lines.push('【<a>】' + href + '  (' + (a.textContent || '').trim() + ')');
-      }
-    });
-
-    // ---- 7b. 从缓存的 main-world 结果中提取 ----
-    var mwResult = window.__bossFindResult;
-    if (mwResult) {
-      if (mwResult.rawIds && mwResult.rawIds.length > 0) {
-        mwResult.rawIds.forEach(function (item) {
-          rawIds.push(item);
-        });
-      }
-      if (mwResult.results) {
-        for (var rk in mwResult.results) {
-          lines.push('【' + rk + '】' + mwResult.results[rk]);
-        }
-      }
-      if (mwResult.componentTree && mwResult.componentTree.length > 0) {
-        lines.push('');
-        lines.push('=== Vue 组件树（深度 <= 5） ===');
-        lines.push('(共 ' + mwResult.attempts + ' 次尝试)');
-        // 组树成层级
-        var lastDepth = 0;
-        mwResult.componentTree.forEach(function (c) {
-          var indent = '';
-          for (var di = 0; di < c.depth; di++) indent += '  ';
-          lines.push(indent + '<' + (c.name || '?') + '> ' + (c.tag || ''));
-        });
-      }
-    }
-
-    // ---- 7c. 检查 URL 参数 ----
-    if (location.search) lines.push('【URL search】' + location.search);
-    if (location.hash) lines.push('【URL hash】' + location.hash);
-
-    // ---- 7d. 检查 data-* 属性 ----
-    document.querySelectorAll('[ka="geek_chat_job_detail"]').forEach(function (el, idx) {
-      for (var ai = 0; ai < el.attributes.length; ai++) {
-        var attr = el.attributes[ai];
-        if (attr.name !== 'class' && attr.name !== 'ka') {
-          lines.push('【attr】geek_chat_job_detail[' + idx + '] ' + attr.name + ' = ' + attr.value);
-        }
-      }
-    });
-
-    // ---- 7e. 构造 URL —— 匹配精确 key，避免 encryptBossId 误匹配 ----
-    var encryptJobId = null;
-    var securityId = null;
-    rawIds.forEach(function (item) {
-      // 精确匹配 encryptJobId（不是 encryptBossId）
-      if (!encryptJobId && item.key === 'encryptJobId') encryptJobId = item.value;
-      // 备选: 包含 'encryptJobId' 但不是 'encryptBossId'
-      if (!encryptJobId && item.key.toLowerCase() === 'encryptjobid') encryptJobId = item.value;
-      // securityId
-      if (!securityId && item.key === 'securityId') securityId = item.value;
-    });
-
-    if (encryptJobId || securityId) {
-      lines.push('');
-      lines.push('=== 构造的 URL ===');
-      if (encryptJobId) {
-        var url = 'https://www.zhipin.com/job_detail/' + encryptJobId + '.html';
-        if (securityId) url += '?securityId=' + encodeURIComponent(securityId);
-        lines.push(url);
-      }
-      if (!encryptJobId && securityId) {
-        lines.push('https://www.zhipin.com/job_detail/{encryptJobId}.html?securityId=' + encodeURIComponent(securityId));
-      }
-    }
-
-    // ---- 7f. 原始 ID 数据 ----
-    if (rawIds.length > 0) {
-      lines.push('');
-      lines.push('=== 原始 ID 数据 ===');
-      rawIds.forEach(function (item) {
-        lines.push(item.source + ' = ' + item.value);
-      });
-    } else {
-      lines.push('');
-      lines.push('(未找到任何 job ID 数据)');
-      lines.push('可能的 Vue 根实例数: ' + (mwResult && mwResult.results ? mwResult.results.VueRootsFound : 'N/A'));
-    }
-
-    return lines;
-  }
-
   // ============================================================
-  // 7g. 获取岗位信息（完整流程：提取 ID → 打开隐藏标签页 → 读取详情 → AI 对话）
+  // 7. 获取岗位信息（完整流程：提取 ID → 打开隐藏标签页 → 读取详情 → AI 对话）
   // ============================================================
   function extractJobIds(mwData) {
     var ids = { encryptJobId: null, securityId: null };
@@ -633,13 +567,7 @@
       var jobUrl = buildJobUrl(ids);
 
       if (!jobUrl) {
-        addSys('⚠️ 未能提取到岗位 ID，尝试 DOM 扫描...', true);
-        // 降级：扫描 DOM
-        var lines = collectJobUrls();
-        addMsg('user', '【扫描结果】\n' + lines.join('\n'));
-        chrome.runtime.sendMessage({ type: 'saveUrls', urls: lines });
-        btnFetch.className = 'act-btn enabled';
-        btnFetch.disabled = false;
+        addSys('⚠️ 未能提取到岗位 ID，无法获取岗位详情', true);
         return;
       }
 
