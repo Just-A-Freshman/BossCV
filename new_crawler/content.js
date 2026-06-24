@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  if (!location.hostname.includes('zhipin.com') || !location.pathname.includes('/chat')) return;
+  var IS_CHAT_PAGE = location.hostname.includes('zhipin.com') && location.pathname.includes('/chat');
 
   // ============================================================
   // 0. 工具函数
@@ -48,7 +48,7 @@
   // ============================================================
   // 2. 挤压页面
   // ============================================================
-  (function squeezePage() {
+  if (IS_CHAT_PAGE) (function squeezePage() {
     var s = document.createElement('style');
     s.id = 'boss-ai-squeeze';
     s.textContent = 'html,body{overflow-x:hidden!important}';
@@ -399,26 +399,24 @@
         ? resp.config.systemPrompt
         : '你是一个面试助手，帮助用户分析岗位要求、优化沟通策略。回答简洁专业，使用中文。';
 
-      // TODO: 方案 C — 从 BOSS直聘 DOM + 网络请求获取真实岗位信息
-      var mockJobInfo = [
-        '【岗位信息简报】',
-        '公司: XX科技有限公司',
-        '岗位: 高级前端开发工程师',
-        '薪资: 25K-50K·15薪',
-        '要求: 5年以上React经验，熟悉TypeScript',
-        '福利: 六险一金·弹性工作·股票期权',
-      ].join('\n');
+      // 从当前页面 DOM 提取岗位元信息
+      var meta = extractJobMeta();
 
-      var mockChatLog = '【聊天记录】\nHR: 你好，看到你投递了我们公司的前端岗位\n我: 您好，我对这个岗位很感兴趣\nHR: 方便发一份简历过来吗';
+      var jobInfoLines = ['【岗位信息简报】'];
+      if (meta.hrName) jobInfoLines.push('HR: ' + meta.hrName);
+      if (meta.company) jobInfoLines.push('公司: ' + meta.company);
+      if (meta.hrTitle) jobInfoLines.push('HR职位: ' + meta.hrTitle);
+      if (meta.jobTitle) jobInfoLines.push('岗位: ' + meta.jobTitle);
+      if (meta.salary) jobInfoLines.push('薪资: ' + meta.salary);
+      if (meta.city) jobInfoLines.push('地点: ' + meta.city);
+      var jobInfo = jobInfoLines.join('\n');
 
       ctx.systemPrompt = [
         basePrompt,
         '',
         '以下是与当前对话的岗位信息和聊天记录：',
         '',
-        mockJobInfo,
-        '',
-        mockChatLog,
+        jobInfo,
         '',
         '请基于以上信息为用户提供建议。',
       ].join('\n');
@@ -426,13 +424,13 @@
       ctx.jobFetched = true;
 
       // 以用户身份自动发送岗位信息
-      addMsg('user', mockJobInfo);
-      ctx.messages.push({ role: 'user', content: mockJobInfo });
+      addMsg('user', jobInfo);
+      ctx.messages.push({ role: 'user', content: jobInfo });
 
       // 流式调用 AI
       var messages = [
         { role: 'system', content: ctx.systemPrompt },
-        { role: 'user', content: mockJobInfo },
+        { role: 'user', content: jobInfo },
       ];
 
       var ctrl = createStreamBubble();
@@ -501,9 +499,49 @@
   });
 
   // ============================================================
-  // 9. 启动
+  // 9. DOM 提取函数
+  // ============================================================
+  function extractText(sel) {
+    var el = document.querySelector(sel);
+    return el ? el.textContent.replace(/\s+/g, ' ').trim() : '';
+  }
+
+  function extractCompany() {
+    var info = document.querySelector('.base-info');
+    if (!info) return '';
+    for (var i = 0; i < info.children.length; i++) {
+      var c = info.children[i];
+      if (c.tagName === 'SPAN' && !c.className) return c.textContent.trim();
+    }
+    return '';
+  }
+
+  function extractJobMeta() {
+    return {
+      hrName:  extractText('.name-text'),
+      company: extractCompany(),
+      hrTitle: extractText('.base-title'),
+      jobTitle: extractText('.position-name'),
+      salary:  extractText('.salary'),
+      city:    extractText('.city'),
+    };
+  }
+
+  // ============================================================
+  // 10. 启动
   // ============================================================
   lastChatId = getChatId();
   refreshPanel();
+
+  if (!IS_CHAT_PAGE) {
+    btnFetch.className = 'act-btn disabled';
+    btnFetch.disabled = true;
+    btnFetch.innerHTML = '发送岗位信息 <span class="badge">仅聊天页面</span>';
+    inputEl.className = 'disabled';
+    inputEl.disabled = true;
+    inputEl.placeholder = '仅聊天页面可用';
+    addSys('当前页面不是聊天页面，部分功能不可用');
+  }
+
   console.log('[BOSS AI] 面板已注入，chatId=' + lastChatId);
 })();
