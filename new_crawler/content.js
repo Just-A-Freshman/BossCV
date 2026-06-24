@@ -48,12 +48,11 @@
   host.id = 'boss-ai-host';
   var root = host.attachShadow({ mode: 'closed' });
 
-  // --- 样式 ---
-  var sheet = new CSSStyleSheet();
-  sheet.replaceSync([
+  // --- 样式（使用 <style> 代替 adoptedStyleSheets，Shadow DOM 兼容性更好）---
+  var style = document.createElement('style');
+  style.textContent = [
     ':host{all:initial;display:block}',
-    '.phone{position:fixed;top:' + TOP + 'px;right:10px;width:' + PANEL_W + 'px;height:calc(100vh - ' + (TOP + 10) + 'px);background:#1c1c2e;border-radius:28px;padding:10px;box-shadow:-6px 0 30px rgba(0,0,0,0.15);border-left:1px solid rgba(0,0,0,0.08);z-index:999999;box-sizing:border-box;display:flex;flex-direction:column;transition:transform 0.3s}',
-    '.phone.hide{transform:translateX(calc(100% + 20px))};pointer-events:none',
+    '.phone{position:fixed;top:' + TOP + 'px;right:10px;width:' + PANEL_W + 'px;height:calc(100vh - ' + (TOP + 10) + 'px);background:#f5f6f8;border-radius:28px;padding:10px;box-shadow:-6px 0 30px rgba(0,0,0,0.15);border-left:1px solid rgba(0,0,0,0.08);z-index:999999;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}',
     '.screen{flex:1;min-height:0;background:#f5f6f8;border-radius:20px;display:flex;flex-direction:column;overflow:hidden}',
     '.canvas{flex:1;min-height:0;padding:16px 12px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;background:#fff}',
     '.canvas::-webkit-scrollbar{width:4px}',
@@ -69,7 +68,7 @@
     '.row.user .bubble{background:#4f7cff;color:#fff;border-radius:14px 14px 4px 14px}',
     '.sys-msg{align-self:center;font-size:12px;color:#999;padding:6px 0;font-family:-apple-system,"Microsoft YaHei",sans-serif}',
     '.sys-msg.error{color:#ff4d4f}',
-    '.bottom{background:#fff;border-top:1px solid #eee;padding:10px 12px 10px}',
+    '.bottom{background:#fff;border-top:1px solid #eee;padding:10px 12px}',
     '.input-row{display:flex;align-items:center;gap:8px}',
     '.input-row input{flex:1;height:36px;border:1px solid #e0e0e0;border-radius:18px;padding:0 14px;font-size:13px;font-family:-apple-system,"Microsoft YaHei",sans-serif;outline:none;background:#f8f9fa;transition:border-color .2s;box-sizing:border-box}',
     '.input-row input:focus{border-color:#4f7cff;background:#fff}',
@@ -85,8 +84,8 @@
     '.act-btn .badge{font-size:11px;margin-left:2px}',
     '@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}',
     '.row,.sys-msg{animation:fadeIn .25s ease}',
-  ].join(''));
-  root.adoptedStyleSheets = [sheet];
+  ].join('');
+  root.appendChild(style);
 
   // --- HTML ---
   var phone = document.createElement('div');
@@ -125,9 +124,9 @@
     'right:10px',
     'width:32px',
     'height:60px',
-    'background:#1c1c2e',
+    'background:#e8eaed',
     'border-radius:8px 0 0 8px',
-    'color:#ccc',
+    'color:#666',
     'font-size:14px',
     'cursor:pointer',
     'z-index:999999',
