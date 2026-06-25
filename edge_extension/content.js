@@ -260,6 +260,17 @@
     '.user-bubble-bar{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}',
     '.row.user .bubble-btn{color:rgba(255,255,255,0.55)}',
     '.row.user .bubble-btn:hover{color:#fff;background:rgba(255,255,255,0.15)}',
+    '.row.user.editing{width:100%}',
+    '.row.user.editing .bubble{width:100%;box-sizing:border-box;background:#f5f6f8;border:2px solid #4f7cff;border-radius:14px;padding:12px}',
+    '.edit-textarea{display:block;width:100%;min-height:180px;border:none;outline:none;background:#f5f6f8;color:#333;font-size:13px;line-height:1.6;font-family:inherit;resize:none;padding:0;margin:0}',
+    '.edit-textarea::placeholder{color:#bbb}',
+    '.edit-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:10px}',
+    '.edit-btn{font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;border-radius:8px;padding:7px 18px;transition:all .15s}',
+    '.edit-btn:active{transform:scale(0.97)}',
+    '.edit-btn-cancel{background:transparent;color:#666;border:1px solid #d0d0d0}',
+    '.edit-btn-cancel:hover{background:#f0f0f0;color:#333}',
+    '.edit-btn-send{background:#4f7cff;color:#fff;border:none}',
+    '.edit-btn-send:hover{background:#3b66e0}',
     // --- 光标闪烁 ---
     '.cursor::after{content:"|";animation:blink .8s infinite}',
     '@keyframes blink{50%{opacity:0}}',
@@ -574,6 +585,72 @@
     editBtn.className = 'bubble-btn';
     editBtn.title = '编辑';
     editBtn.innerHTML = EDIT_SVG;
+    editBtn.addEventListener('click', function () {
+      if (streaming) return;
+      var rowEl = bubbleEl.closest('.row');
+      var originalText = bubbleEl.textContent.replace(/\s*$/, '');
+      var originalHTML = bubbleEl.innerHTML;
+
+      rowEl.classList.add('editing');
+      bubbleEl.innerHTML = '';
+
+      var textarea = document.createElement('textarea');
+      textarea.className = 'edit-textarea';
+      textarea.value = originalText;
+      bubbleEl.appendChild(textarea);
+
+      var actionBar = document.createElement('div');
+      actionBar.className = 'edit-actions';
+
+      var cancelBtn = document.createElement('button');
+      cancelBtn.className = 'edit-btn edit-btn-cancel';
+      cancelBtn.textContent = '取消';
+
+      var sendBtn = document.createElement('button');
+      sendBtn.className = 'edit-btn edit-btn-send';
+      sendBtn.textContent = '发送';
+
+      actionBar.appendChild(cancelBtn);
+      actionBar.appendChild(sendBtn);
+      bubbleEl.appendChild(actionBar);
+
+      textarea.focus();
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+      cancelBtn.addEventListener('click', function () {
+        rowEl.classList.remove('editing');
+        bubbleEl.innerHTML = originalHTML;
+      });
+
+      sendBtn.addEventListener('click', function () {
+        var newText = textarea.value.trim();
+        if (!newText) return;
+        var ctx = getCurrentCtx();
+
+        var rowCount = 0;
+        var walker = canvasEl.firstElementChild;
+        while (walker && walker !== rowEl) {
+          if (walker.classList.contains('row')) rowCount++;
+          walker = walker.nextElementSibling;
+        }
+        var userIdx = rowCount - 1;
+        if (userIdx < 0 || userIdx >= ctx.messages.length || ctx.messages[userIdx].role !== 'user') return;
+
+        ctx.messages[userIdx].content = newText;
+        rowEl.classList.remove('editing');
+        bubbleEl.innerHTML = escHtml(newText);
+        addUserBubbleActions(bubbleEl);
+
+        var toRemove = [];
+        var nxt = rowEl.nextElementSibling;
+        while (nxt) { toRemove.push(nxt); nxt = nxt.nextElementSibling; }
+        toRemove.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
+        ctx.messages.splice(userIdx + 1);
+        saveCurrentCtx();
+
+        askAI(newText);
+      });
+    });
     bar.appendChild(editBtn);
 
     bubbleEl.appendChild(bar);
