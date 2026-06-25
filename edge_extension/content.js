@@ -550,6 +550,24 @@
     copyBtn.className = 'bubble-btn';
     copyBtn.title = '复制';
     copyBtn.innerHTML = COPY_SVG;
+    copyBtn.addEventListener('click', function () {
+      var text = '';
+      for (var i = 0; i < bubbleEl.childNodes.length; i++) {
+        var n = bubbleEl.childNodes[i];
+        if (n.classList && n.classList.contains('user-bubble-bar')) continue;
+        if (n.nodeType === 3) { text += n.textContent; continue; }
+        if (n.textContent) text += n.textContent;
+      }
+      text = text.trim();
+      if (!text) return;
+      navigator.clipboard.writeText(text).catch(function () {});
+      copyBtn.innerHTML = CHECK_SVG;
+      copyBtn.title = '已复制';
+      setTimeout(function () {
+        copyBtn.innerHTML = COPY_SVG;
+        copyBtn.title = '复制';
+      }, 1500);
+    });
     bar.appendChild(copyBtn);
 
     var editBtn = document.createElement('button');
