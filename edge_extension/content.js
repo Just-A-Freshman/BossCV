@@ -987,6 +987,11 @@
 
   function fetchJobInfo() {
     if (streaming) return;
+    // 立即置灰，防止重复点击
+    btnFetch.className = 'act-btn disabled';
+    btnFetch.disabled = true;
+    btnFetch.innerHTML = '发送岗位信息';
+
     var ctx = getCurrentCtx();
     addSys('正在注入脚本获取岗位标识...');
 
@@ -1026,8 +1031,6 @@
             { role: 'user', content: jobInfo },
           ]);
 
-          btnFetch.className = 'act-btn disabled';
-          btnFetch.disabled = true;
           btnFetch.innerHTML = '发送岗位信息 <span class="badge">✅</span>';
           addSys('岗位信息已获取，可继续对话');
         });
