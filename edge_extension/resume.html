@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>我的简历</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, "Microsoft YaHei", "PingFang SC", sans-serif;
+      background: #f5f6f8;
+      color: #333;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ===== 左侧侧边栏 ===== */
+    .sidebar {
+      width: 220px;
+      min-width: 220px;
+      background: #fff;
+      border-right: 1px solid #eee;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      z-index: 10;
+    }
+    .sidebar-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #000;
+      padding: 28px 24px 20px;
+    }
+    .sidebar-nav {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 12px;
+    }
+    .sidebar-link {
+      display: block;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: #555;
+      text-decoration: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .sidebar-link:hover { background: #f0f2f5; color: #333; }
+    .sidebar-link.active { background: #e8f0fe; color: #4f7cff; font-weight: 500; }
+    .sidebar-actions {
+      padding: 16px;
+      border-top: 1px solid #eee;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .sidebar-btn {
+      width: 100%;
+      padding: 10px 0;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .15s;
+      text-align: center;
+      border: none;
+    }
+    .sidebar-btn:active { transform: scale(0.97); }
+    .sidebar-btn-save {
+      background: #4f7cff;
+      color: #fff;
+    }
+    .sidebar-btn-save:hover { background: #3b66e0; }
+    .sidebar-btn-sync {
+      background: #fff;
+      color: #4f7cff;
+      border: 1px solid #4f7cff;
+    }
+    .sidebar-btn-sync:hover { background: #f5f7ff; }
+
+    /* ===== 右侧主内容 ===== */
+    .content {
+      flex: 1;
+      margin-left: 220px;
+      padding: 32px 40px 80px;
+      max-width: 860px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #000;
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e8f0fe;
+    }
+
+    /* 字段网格 */
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 20px;
+    }
+    .field-row-3 {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+    .field-group { display: flex; flex-direction: column; gap: 4px; }
+    .field-group.full { grid-column: 1 / -1; }
+    .field-label {
+      font-size: 12px;
+      color: #888;
+      font-weight: 500;
+    }
+    .field-input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .2s;
+      color: #333;
+      background: #fafbfc;
+    }
+    .field-input:focus { border-color: #4f7cff; background: #fff; }
+    .field-textarea {
+      width: 100%;
+      min-height: 90px;
+      padding: 10px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      line-height: 1.6;
+      outline: none;
+      resize: vertical;
+      transition: border-color .2s, background .2s;
+      color: #333;
+      background: #fafbfc;
+    }
+    .field-textarea:focus { border-color: #4f7cff; background: #fff; }
+    .field-textarea.tall { min-height: 140px; }
+
+    /* 自定义模块条目 */
+    .extra-entry {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .extra-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .extra-header .field-label { flex-shrink: 0; }
+    .extra-title {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .2s;
+      color: #333;
+      background: #fff;
+    }
+    .extra-title:focus { border-color: #4f7cff; }
+
+    /* 动态列表（技能块） */
+    .dyn-list { display: flex; flex-direction: column; gap: 10px; }
+    .dyn-item {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .dyn-item .field-textarea { flex: 1; }
+    .dyn-del {
+      background: none;
+      border: none;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 8px 6px;
+      border-radius: 4px;
+      transition: color .15s, background .15s;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .dyn-del:hover { color: #ff4d4f; background: #fff2f0; }
+    .dyn-add {
+      background: none;
+      border: 1px dashed #d0d0d0;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 13px;
+      font-family: inherit;
+      color: #888;
+      cursor: pointer;
+      transition: all .15s;
+      width: 100%;
+      margin-top: 4px;
+    }
+    .dyn-add:hover { border-color: #4f7cff; color: #4f7cff; background: #f5f7ff; }
+
+    /* 复合条目（工作/项目等） */
+    .entry-card {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .entry-card .dyn-del {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      font-size: 14px;
+    }
+    .entry-card .field-row { margin-bottom: 10px; }
+    .entry-card .field-row:last-child { margin-bottom: 0; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity .25s;
+      pointer-events: none;
+      z-index: 999;
+    }
+    .toast.show { opacity: 1; }
+
+    /* 活跃目录高亮 */
+    .section-anchor { scroll-margin-top: 20px; }
+
+    @media (max-width: 640px) {
+      .sidebar { display: none; }
+      .content { margin-left: 0; padding: 20px 16px 60px; }
+      .field-row { grid-template-columns: 1fr; }
+      .field-row-3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== 侧边栏 ===== -->
+  <aside class="sidebar">
+    <h1 class="sidebar-title">我的简历</h1>
+    <nav class="sidebar-nav" id="toc"></nav>
+    <div class="sidebar-actions">
+      <button class="sidebar-btn sidebar-btn-sync" id="syncBtn">同步在线简历</button>
+      <button class="sidebar-btn sidebar-btn-save" id="saveBtn">导出简历内容</button>
+    </div>
+  </aside>
+
+  <!-- ===== 主内容 ===== -->
+  <main class="content" id="content">
+
+    <!-- 基础信息 -->
+    <section class="card section-anchor" id="s-basic">
+      <h2 class="card-title">基础信息</h2>
+      <div class="field-row">
+        <div class="field-group"><label class="field-label">姓名</label><input class="field-input" data-path="basic.name" /></div>
+        <div class="field-group"><label class="field-label">性别</label><input class="field-input" data-path="basic.gender" /></div>
+        <div class="field-group"><label class="field-label">出生日期</label><input class="field-input" data-path="basic.birthDate" placeholder="1995-01" /></div>
+        <div class="field-group"><label class="field-label">工作年限</label><input class="field-input" data-path="basic.workYears" placeholder="8年" /></div>
+        <div class="field-group"><label class="field-label">求职意向</label><input class="field-input" data-path="basic.jobIntention" /></div>
+        <div class="field-group"><label class="field-label">电话</label><input class="field-input" data-path="basic.phone" /></div>
+        <div class="field-group"><label class="field-label">邮箱</label><input class="field-input" data-path="basic.email" /></div>
+        <div class="field-group"><label class="field-label">政治面貌</label><input class="field-input" data-path="basic.politicalStatus" /></div>
+      </div>
+      <div class="field-group full" style="margin-top:14px">
+        <label class="field-label">自定义信息</label>
+        <textarea class="field-textarea" data-path="basic.custom" placeholder="其他需要补充的基础信息"></textarea>
+      </div>
+    </section>
+
+    <!-- 教育背景 -->
+    <section class="card section-anchor" id="s-education">
+      <h2 class="card-title">教育背景</h2>
+      <div class="field-row">
+        <div class="field-group"><label class="field-label">学校名称</label><input class="field-input" data-path="education.school" /></div>
+        <div class="field-group"><label class="field-label">专业</label><input class="field-input" data-path="education.major" /></div>
+        <div class="field-group"><label class="field-label">学历</label><input class="field-input" data-path="education.degree" placeholder="本科/硕士/博士" /></div>
+        <div class="field-group"><label class="field-label">在校时间</label><input class="field-input" data-path="education.period" placeholder="2016.09 - 2020.06" /></div>
+      </div>
+      <div class="field-group full" style="margin-top:14px">
+        <label class="field-label">相关课程</label>
+        <textarea class="field-textarea" data-path="education.courses" placeholder="列举核心课程，用逗号分隔"></textarea>
+      </div>
+      <div class="field-group full" style="margin-top:14px">
+        <label class="field-label">自定义信息</label>
+        <textarea class="field-textarea" data-path="education.custom" placeholder="其他教育背景补充"></textarea>
+      </div>
+    </section>
+
+    <!-- 专业技能 -->
+    <section class="card section-anchor" id="s-skills">
+      <h2 class="card-title">专业技能</h2>
+      <div class="dyn-list" id="skillsList"></div>
+      <button class="dyn-add" id="skillsAdd">+ 添加技能块</button>
+    </section>
+
+    <!-- 工作经历 -->
+    <section class="card section-anchor" id="s-work">
+      <h2 class="card-title">工作经历</h2>
+      <div id="workList"></div>
+      <button class="dyn-add" id="workAdd">+ 添加工作经历</button>
+    </section>
+
+    <!-- 实习经历 -->
+    <section class="card section-anchor" id="s-internship">
+      <h2 class="card-title">实习经历</h2>
+      <div id="internshipList"></div>
+      <button class="dyn-add" id="internshipAdd">+ 添加实习经历</button>
+    </section>
+
+    <!-- 项目经历 -->
+    <section class="card section-anchor" id="s-projects">
+      <h2 class="card-title">项目经历</h2>
+      <div id="projectsList"></div>
+      <button class="dyn-add" id="projectsAdd">+ 添加项目经历</button>
+    </section>
+
+    <!-- 荣誉证书 -->
+    <section class="card section-anchor" id="s-honors">
+      <h2 class="card-title">荣誉证书</h2>
+      <textarea class="field-textarea tall" data-path="honors" placeholder="列举获得的荣誉和证书"></textarea>
+    </section>
+
+    <!-- 自我评价 -->
+    <section class="card section-anchor" id="s-self">
+      <h2 class="card-title">自我评价</h2>
+      <textarea class="field-textarea tall" data-path="selfEvaluation" placeholder="简要描述个人优势及职业规划"></textarea>
+    </section>
+
+    <!-- 添加模块 -->
+    <section class="card section-anchor" id="s-extra">
+      <h2 class="card-title">添加模块</h2>
+      <div id="extraList"></div>
+      <button class="dyn-add" id="extraAdd">+ 添加模块</button>
+    </section>
+
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <script src="resume.js"></script>
+</body>
+</html>
