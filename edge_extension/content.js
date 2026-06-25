@@ -482,6 +482,7 @@
         var n = bubbleEl.childNodes[i];
         if (n.classList && n.classList.contains('bubble-bottom-bar')) continue;
         if (n.nodeType === 3) { text += n.textContent; continue; }
+        if (n.tagName === 'BR') { text += '\n'; continue; }
         if (n.textContent) text += n.textContent;
       }
       text = text.trim();
@@ -567,6 +568,7 @@
         var n = bubbleEl.childNodes[i];
         if (n.classList && n.classList.contains('user-bubble-bar')) continue;
         if (n.nodeType === 3) { text += n.textContent; continue; }
+        if (n.tagName === 'BR') { text += '\n'; continue; }
         if (n.textContent) text += n.textContent;
       }
       text = text.trim();
@@ -951,23 +953,19 @@
             'Base属地：' + (data.city || '未知'),
             '工作时间：' + (data.workSchedule || '未知'),
             '学历要求：' + (data.education || '未知'),
-            '',
-            '【公司基本信息】',
+            '\n【公司基本信息】',
             '融资阶段：' + (data.stage || '未知'),
             '人员规模：' + (data.scale || '未知'),
             '所属行业：' + (data.industry || '未知'),
-            '',
-            '【岗位描述】',
+            '\n【岗位描述】',
             (data.description || '无'),
-            '',
-            '【公司介绍】',
+            '\n【公司介绍】',
             (data.companyIntro || '无'),
-            '',
           ].join('\n');
 
           // 工商信息
           if (data.bizInfo && data.bizInfo.length > 0) {
-            jobInfo += '\n【工商信息】\n' + data.bizInfo.join('\n') + '\n';
+            jobInfo += '\n\n【工商信息】\n' + data.bizInfo.join('\n') + '\n';
           }
 
           jobInfo += '\n【工作地址】\n' + (data.address || '未知') + '\n';
