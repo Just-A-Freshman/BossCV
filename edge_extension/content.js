@@ -488,6 +488,29 @@
     return text.trim();
   }
 
+  function createCopyBtn(bubbleEl, skipClass) {
+    var btn = document.createElement('button');
+    btn.className = 'bubble-btn';
+    btn.title = '复制';
+    btn.innerHTML = COPY_SVG;
+    btn.addEventListener('click', function () {
+      var text = getBubbleText(bubbleEl, skipClass);
+      if (!text) return;
+      navigator.clipboard.writeText(text).catch(function () {});
+      btn.innerHTML = CHECK_SVG;
+      btn.title = '已复制';
+      setTimeout(function () {
+        btn.innerHTML = COPY_SVG;
+        btn.title = '复制';
+      }, 1500);
+    });
+    return btn;
+  }
+
+  function removeSiblingsAfter(el) {
+    while (el.nextElementSibling) el.nextElementSibling.remove();
+  }
+
   function addBubbleActions(bubbleEl, timeMs) {
     var bar = document.createElement('div');
     bar.className = 'bubble-bottom-bar';
@@ -495,22 +518,7 @@
     var actions = document.createElement('div');
     actions.className = 'bubble-actions';
 
-    var copyBtn = document.createElement('button');
-    copyBtn.className = 'bubble-btn';
-    copyBtn.title = '复制';
-    copyBtn.innerHTML = COPY_SVG;
-    copyBtn.addEventListener('click', function () {
-      var text = getBubbleText(bubbleEl, 'bubble-bottom-bar');
-      if (!text) return;
-      navigator.clipboard.writeText(text).catch(function () {});
-      // 切换为打勾图标，1.5s 后复原
-      copyBtn.innerHTML = CHECK_SVG;
-      copyBtn.title = '已复制';
-      setTimeout(function () {
-        copyBtn.innerHTML = COPY_SVG;
-        copyBtn.title = '复制';
-      }, 1500);
-    });
+    var copyBtn = createCopyBtn(bubbleEl, 'bubble-bottom-bar');
     actions.appendChild(copyBtn);
 
     var regenBtn = document.createElement('button');
@@ -532,12 +540,9 @@
       while (prevRow && !prevRow.classList.contains('row')) {
         prevRow = prevRow.previousElementSibling;
       }
-      var after = [];
-      var n = rowEl.nextElementSibling;
-      while (n) { after.push(n); n = n.nextElementSibling; }
-      [prevRow, rowEl].concat(after).forEach(function (el) {
-        if (el && el.parentNode) el.parentNode.removeChild(el);
-      });
+      removeSiblingsAfter(rowEl);
+      if (prevRow && prevRow.parentNode) prevRow.parentNode.removeChild(prevRow);
+      if (rowEl.parentNode) rowEl.parentNode.removeChild(rowEl);
 
       // 截断消息历史：删除用户消息及其后所有内容
       ctx.messages.splice(userIdx);
@@ -566,21 +571,7 @@
     var bar = document.createElement('div');
     bar.className = 'user-bubble-bar';
 
-    var copyBtn = document.createElement('button');
-    copyBtn.className = 'bubble-btn';
-    copyBtn.title = '复制';
-    copyBtn.innerHTML = COPY_SVG;
-    copyBtn.addEventListener('click', function () {
-      var text = getBubbleText(bubbleEl, 'user-bubble-bar');
-      if (!text) return;
-      navigator.clipboard.writeText(text).catch(function () {});
-      copyBtn.innerHTML = CHECK_SVG;
-      copyBtn.title = '已复制';
-      setTimeout(function () {
-        copyBtn.innerHTML = COPY_SVG;
-        copyBtn.title = '复制';
-      }, 1500);
-    });
+    var copyBtn = createCopyBtn(bubbleEl, 'user-bubble-bar');
     bar.appendChild(copyBtn);
 
     var editBtn = document.createElement('button');
@@ -634,7 +625,6 @@
         if (!newText) return;
         var ctx = getCurrentCtx();
 
-        var userIdx = getMessageIndexFromRow(rowEl) - 1;
         if (userIdx < 0 || userIdx >= ctx.messages.length || ctx.messages[userIdx].role !== 'user') return;
 
         ctx.messages[userIdx].content = newText;
@@ -642,10 +632,7 @@
         bubbleEl.innerHTML = escHtml(newText);
         addUserBubbleActions(bubbleEl);
 
-        var toRemove = [];
-        var nxt = rowEl.nextElementSibling;
-        while (nxt) { toRemove.push(nxt); nxt = nxt.nextElementSibling; }
-        toRemove.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
+        removeSiblingsAfter(rowEl);
         ctx.messages.splice(userIdx + 1);
         saveCurrentCtx();
 
@@ -729,6 +716,34 @@
     };
   }
 
+  // 按钮状态管理
+  function setFetchBtnState(state) {
+    if (state === 'done') {
+      btnFetch.className = 'act-btn disabled';
+      btnFetch.disabled = true;
+      btnFetch.innerHTML = '发送岗位信息 <span class="badge">✅</span>';
+    } else if (state === 'loading') {
+      btnFetch.className = 'act-btn disabled';
+      btnFetch.disabled = true;
+      btnFetch.innerHTML = '发送岗位信息';
+    } else {
+      btnFetch.className = 'act-btn enabled';
+      btnFetch.disabled = false;
+      btnFetch.innerHTML = '发送岗位信息';
+    }
+  }
+
+  // 添加用户消息（含持久化）
+  function addUserMessage(text) {
+    addMsg('user', text);
+    var ctx = getCurrentCtx();
+    ctx.messages.push({ role: 'user', content: text });
+    saveCurrentCtx();
+  }
+
+  var DEFAULT_PROMPT_BEFORE = '你是一个面试助手，回答简洁专业，使用中文。当前用户还未获取岗位信息，你可以建议用户先获取岗位信息。';
+  var DEFAULT_PROMPT_AFTER = '你是一个面试助手，帮助用户分析岗位要求、优化沟通策略。回答简洁专业，使用中文。';
+
   // ============================================================
   // 5. 刷新面板（对话切换时重建）
   // ============================================================
@@ -747,13 +762,9 @@
       var rest = ctx.messages.slice(2);
       rest.forEach(function (m) { addMsg(m.role === 'assistant' ? 'ai' : 'user', m.content); });
 
-      btnFetch.className = 'act-btn disabled';
-      btnFetch.disabled = true;
-      btnFetch.innerHTML = '发送岗位信息 <span class="badge">✅</span>';
+      setFetchBtnState('done');
     } else {
-      btnFetch.className = 'act-btn enabled';
-      btnFetch.disabled = false;
-      btnFetch.innerHTML = '发送岗位信息';
+      setFetchBtnState('ready');
     }
 
     inputEl.className = '';
@@ -767,11 +778,13 @@
   var cachedBasePrompt = null;
   var streaming = false; // 是否正在流式输出
 
-  function ensureBasePrompt(cb) {
-    if (cachedBasePrompt) { cb(cachedBasePrompt); return; }
-    chrome.runtime.sendMessage({ type: 'getConfig' }, function (resp) {
-      cachedBasePrompt = (resp && resp.ok && resp.config.systemPrompt) || null;
-      cb(cachedBasePrompt);
+  function getBasePrompt() {
+    if (cachedBasePrompt) return Promise.resolve(cachedBasePrompt);
+    return new Promise(function (resolve) {
+      chrome.runtime.sendMessage({ type: 'getConfig' }, function (resp) {
+        cachedBasePrompt = (resp && resp.ok && resp.config.systemPrompt) || null;
+        resolve(cachedBasePrompt);
+      });
     });
   }
 
@@ -832,14 +845,8 @@
     if (streaming) return;
     var ctx = getCurrentCtx();
 
-    ensureBasePrompt(function (userBasePrompt) {
-      var systemMsg;
-      if (ctx.jobFetched && ctx.systemPrompt) {
-        systemMsg = ctx.systemPrompt;
-      } else {
-        systemMsg = userBasePrompt || '你是一个面试助手，回答简洁专业，使用中文。当前用户还未获取岗位信息，你可以建议用户先获取岗位信息。';
-      }
-
+    getBasePrompt().then(function (userBasePrompt) {
+      var systemMsg = (ctx.jobFetched && ctx.systemPrompt) || userBasePrompt || DEFAULT_PROMPT_BEFORE;
       var messages = [
         { role: 'system', content: systemMsg },
       ].concat(ctx.messages.slice(-20));
@@ -847,9 +854,7 @@
       messages.push({ role: 'user', content: userMsg });
 
       if (!skipUserDisplay) {
-        addMsg('user', userMsg);
-        ctx.messages.push({ role: 'user', content: userMsg });
-        saveCurrentCtx();
+        addUserMessage(userMsg);
       }
 
       startStreaming(messages);
@@ -977,20 +982,11 @@
     return info;
   }
 
-  function getConfig() {
-    return new Promise(function (resolve) {
-      chrome.runtime.sendMessage({ type: 'getConfig' }, function (resp) {
-        resolve((resp && resp.ok && resp.config) || {});
-      });
-    });
-  }
 
   function fetchJobInfo() {
     if (streaming) return;
     // 立即置灰，防止重复点击
-    btnFetch.className = 'act-btn disabled';
-    btnFetch.disabled = true;
-    btnFetch.innerHTML = '发送岗位信息';
+    setFetchBtnState('loading');
 
     var ctx = getCurrentCtx();
     addSys('正在注入脚本获取岗位标识...');
@@ -1008,8 +1004,8 @@
           throw new Error(data ? (data.error || '数据为空') : '未知错误');
         }
         var jobInfo = buildJobInfoString(data);
-        return getConfig().then(function (cfg) {
-          var basePrompt = cfg.systemPrompt || '你是一个面试助手，帮助用户分析岗位要求、优化沟通策略。回答简洁专业，使用中文。';
+        return getBasePrompt().then(function (basePrompt) {
+          basePrompt = basePrompt || DEFAULT_PROMPT_AFTER;
           ctx.systemPrompt = [
             basePrompt,
             '',
@@ -1022,23 +1018,20 @@
           ctx.jobFetched = true;
           ctx.messages = [];
 
-          addMsg('user', jobInfo);
-          ctx.messages.push({ role: 'user', content: jobInfo });
-          saveCurrentCtx();
+          addUserMessage(jobInfo);
 
           startStreaming([
             { role: 'system', content: ctx.systemPrompt },
             { role: 'user', content: jobInfo },
           ]);
 
-          btnFetch.innerHTML = '发送岗位信息 <span class="badge">✅</span>';
+          setFetchBtnState('done');
           addSys('岗位信息已获取，可继续对话');
         });
       })
       .catch(function (err) {
         addSys('⚠️ ' + err.message, true);
-        btnFetch.className = 'act-btn enabled';
-        btnFetch.disabled = false;
+        setFetchBtnState('ready');
       });
   }
 
