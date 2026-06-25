@@ -589,7 +589,6 @@
       if (streaming) return;
       var rowEl = bubbleEl.closest('.row');
       var originalText = bubbleEl.textContent.replace(/\s*$/, '');
-      var originalHTML = bubbleEl.innerHTML;
 
       rowEl.classList.add('editing');
       bubbleEl.innerHTML = '';
@@ -619,7 +618,8 @@
 
       cancelBtn.addEventListener('click', function () {
         rowEl.classList.remove('editing');
-        bubbleEl.innerHTML = originalHTML;
+        bubbleEl.innerHTML = escHtml(originalText);
+        addUserBubbleActions(bubbleEl);
       });
 
       sendBtn.addEventListener('click', function () {
@@ -648,7 +648,7 @@
         ctx.messages.splice(userIdx + 1);
         saveCurrentCtx();
 
-        askAI(newText);
+        askAI(newText, true);
       });
     });
     bar.appendChild(editBtn);
