@@ -140,11 +140,30 @@
   }
 
   var panelActive = false;
+  var rightBottomEl = null;
+  var savedRightBottomZ = null;
 
   function setPanelVisible(visible) {
     if (visible === panelActive || !host) return;
     panelActive = visible;
     host.style.display = visible ? '' : 'none';
+
+    // 控制右下角浮动栏的层级，避免遮挡 AI 面板
+    if (visible) {
+      if (!rightBottomEl) rightBottomEl = document.querySelector('.right-bottom-fixed');
+      if (rightBottomEl) {
+        savedRightBottomZ = rightBottomEl.style.zIndex || '';
+        rightBottomEl.style.setProperty('z-index', '1', 'important');
+      }
+    } else {
+      if (rightBottomEl) {
+        if (savedRightBottomZ) {
+          rightBottomEl.style.zIndex = savedRightBottomZ;
+        } else {
+          rightBottomEl.style.removeProperty('z-index');
+        }
+      }
+    }
   }
 
   // MutationObserver 只处理对话切换，不做可见性检测（避免 DOM 未就绪时误判）
