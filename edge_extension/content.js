@@ -262,7 +262,7 @@
     '.row.user .bubble-btn:hover{color:#fff;background:rgba(255,255,255,0.15)}',
     '.row.user.editing{width:100%}',
     '.row.user.editing .bubble{width:100%;box-sizing:border-box;background:#f5f6f8;border:2px solid #4f7cff;border-radius:14px;padding:12px}',
-    '.edit-textarea{display:block;width:100%;min-height:180px;border:none;outline:none;background:#f5f6f8;color:#333;font-size:13px;line-height:1.6;font-family:inherit;resize:none;padding:0;margin:0}',
+    '.edit-textarea{display:block;width:100%;min-height:0;border:none;outline:none;background:#f5f6f8;color:#333;font-size:13px;line-height:1.6;font-family:inherit;resize:none;padding:0;margin:0}',
     '.edit-textarea::placeholder{color:#bbb}',
     '.edit-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:10px}',
     '.edit-btn{font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;border-radius:8px;padding:7px 18px;transition:all .15s}',
@@ -585,6 +585,8 @@
       var ctx = getCurrentCtx();
       var originalText = (ctx.messages[userIdx]?.content || '').replace(/\s*$/, '');
 
+      var bubbleHeight = bubbleEl.offsetHeight;
+
       rowEl.classList.add('editing');
       bubbleEl.innerHTML = '';
 
@@ -592,6 +594,11 @@
       textarea.className = 'edit-textarea';
       textarea.value = originalText;
       bubbleEl.appendChild(textarea);
+
+      var maxEditH = 180;
+      var targetH = Math.min(bubbleHeight || maxEditH, maxEditH);
+      textarea.style.height = targetH + 'px';
+      textarea.style.overflowY = 'auto';
 
       var actionBar = document.createElement('div');
       actionBar.className = 'edit-actions';
