@@ -978,8 +978,8 @@
             jobInfo += '\n' + extras.join('\n') + '\n';
           }
 
-          jobInfo += '```\n\n';
-          jobInfo += '了解完这个岗位信息后，只需回复：`我已经对该岗位有了全面理解。等待您的问题！`即可';
+          jobInfo += '```';
+          jobInfo += '\n了解完这个岗位信息后，只需回复：`我已经对该岗位有了全面理解。等待您的问题！`即可';
 
           // 获取用户的系统提示词配置
           chrome.runtime.sendMessage({ type: 'getConfig' }, function (resp) {
