@@ -101,19 +101,15 @@
       }
     });
 
-    // 从 DOM 中找 __vue__
+    // 单次遍历查找 __vue__ 和 __vue_app__（消除重复 DOM 全遍历）
     var all = document.querySelectorAll('*');
-    for (var i = 0; i < all.length && i < 3000; i++) {
+    var limit = Math.min(all.length, 3000);
+    for (var i = 0; i < limit; i++) {
       try {
-        if (all[i].__vue__) { roots.push(all[i].__vue__); break; }
+        if (all[i].__vue__) roots.push(all[i].__vue__);
       } catch (e) {}
-    }
-    for (var j = 0; j < all.length && j < 3000; j++) {
       try {
-        if (all[j].__vue_app__) {
-          try { if (all[j].__vue_app__._instance) roots.push(all[j].__vue_app__._instance); } catch (e) {}
-          break;
-        }
+        if (all[i].__vue_app__ && all[i].__vue_app__._instance) roots.push(all[i].__vue_app__._instance);
       } catch (e) {}
     }
 

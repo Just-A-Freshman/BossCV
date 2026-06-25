@@ -456,6 +456,17 @@
     el.style.overflowY = scrollH > maxH ? 'auto' : 'hidden';
   }
 
+  // 通过 DOM 中的 .row 位置推算对应的 ctx.messages 索引
+  function getMessageIndexFromRow(rowEl) {
+    var count = 0;
+    var walker = canvasEl.firstElementChild;
+    while (walker && walker !== rowEl) {
+      if (walker.classList.contains('row')) count++;
+      walker = walker.nextElementSibling;
+    }
+    return count;
+  }
+
   // ============================================================
   // 4a. AI 气泡底部按钮栏（复制 / 重新生成）
   // ============================================================
@@ -463,6 +474,19 @@
   var REGEN_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7.92136 0.349152C10.3744 0.349234 12.5564 1.5052 13.9557 3.29894L15.1281 2.12759C15.3303 1.92546 15.6767 2.06943 15.6767 2.35538V5.53923C15.6766 5.71626 15.5329 5.85976 15.3559 5.86002H12.171C11.8854 5.8597 11.7426 5.51465 11.9443 5.31249L12.9641 4.29056C11.8237 2.74305 9.98908 1.74106 7.92136 1.74097C4.46436 1.74097 1.66233 4.543 1.66233 8C1.66233 11.457 4.46436 14.259 7.92136 14.259C11.3782 14.2589 14.1804 11.4569 14.1804 8H15.5722C15.5722 12.2251 12.1465 15.6507 7.92136 15.6508C3.69614 15.6508 0.270508 12.2252 0.270508 8C0.270508 3.77478 3.69614 0.349152 7.92136 0.349152Z" fill="currentColor"></svg>';
   var CHECK_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13.3 4.3c.2.2.2.5 0 .7l-7 7c-.2.2-.5.2-.7 0l-3-3c-.2-.2-.2-.5 0-.7.2-.2.5-.2.7 0L6 10.9 12.6 4.3c.2-.2.5-.2.7 0z" fill="currentColor"/></svg>';
   var EDIT_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9.94076 1.34942C10.7047 0.90231 11.6503 0.902415 12.4143 1.34942C12.7061 1.52015 12.9688 1.79118 13.3104 2.13284C13.6521 2.47448 13.9231 2.73721 14.0939 3.02894C14.5408 3.79294 14.5409 4.73856 14.0939 5.50251C13.9231 5.79415 13.652 6.05704 13.3104 6.39861L6.65932 13.0497C6.28068 13.4284 6.00695 13.7108 5.66543 13.9097C5.32391 14.1085 4.94315 14.2074 4.42705 14.3498L3.24394 14.6761C2.77527 14.8054 2.34538 14.9262 2.00131 14.9684C1.65196 15.0112 1.17964 15.0013 0.810764 14.6325C0.441921 14.2637 0.432107 13.7913 0.47486 13.442C0.517035 13.0979 0.6379 12.668 0.767181 12.1993L1.09352 11.0162C1.23588 10.5001 1.33481 10.1193 1.5336 9.77784C1.7325 9.43632 2.0149 9.1626 2.39355 8.78395L9.04466 2.13284C9.38625 1.79126 9.64911 1.52016 9.94076 1.34942ZM15.5427 14.8398H7.55223L8.96707 13.425H15.5427V14.8398ZM3.39382 9.78422C2.965 10.213 2.84244 10.3436 2.75709 10.49C2.67183 10.6366 2.61862 10.8079 2.45733 11.3925L2.13099 12.5756C2.00183 13.0439 1.92194 13.3419 1.88863 13.5536C2.10041 13.5204 2.39872 13.4416 2.86764 13.3123L4.05075 12.9859C4.63544 12.8246 4.80669 12.7715 4.95323 12.6862C5.09968 12.6008 5.23022 12.4783 5.65905 12.0494L10.721 6.98644L8.45577 4.72121L3.39382 9.78422ZM11.7 2.57079C11.3774 2.38198 10.9777 2.38198 10.6551 2.57079C10.5602 2.62647 10.4487 2.72931 10.0449 3.13311L9.45604 3.72094L11.7213 5.98617L12.3102 5.39833C12.7139 4.99457 12.8168 4.88307 12.8725 4.78818C13.0613 4.46561 13.0612 4.06585 12.8725 3.74326C12.8169 3.64827 12.7146 3.53752 12.3102 3.13311C11.9057 2.72863 11.795 2.6264 11.7 2.57079Z" fill="currentColor"></svg>';
+
+  // 提取气泡纯文本（跳过操作按钮栏，如复制/编辑等）
+  function getBubbleText(bubbleEl, skipClass) {
+    var text = '';
+    for (var i = 0; i < bubbleEl.childNodes.length; i++) {
+      var n = bubbleEl.childNodes[i];
+      if (n.classList && n.classList.contains(skipClass)) continue;
+      if (n.nodeType === 3) { text += n.textContent; continue; }
+      if (n.tagName === 'BR') { text += '\n'; continue; }
+      if (n.textContent) text += n.textContent;
+    }
+    return text.trim();
+  }
 
   function addBubbleActions(bubbleEl, timeMs) {
     var bar = document.createElement('div');
@@ -476,16 +500,7 @@
     copyBtn.title = '复制';
     copyBtn.innerHTML = COPY_SVG;
     copyBtn.addEventListener('click', function () {
-      // 提取气泡文本（排除底部按钮栏）
-      var text = '';
-      for (var i = 0; i < bubbleEl.childNodes.length; i++) {
-        var n = bubbleEl.childNodes[i];
-        if (n.classList && n.classList.contains('bubble-bottom-bar')) continue;
-        if (n.nodeType === 3) { text += n.textContent; continue; }
-        if (n.tagName === 'BR') { text += '\n'; continue; }
-        if (n.textContent) text += n.textContent;
-      }
-      text = text.trim();
+      var text = getBubbleText(bubbleEl, 'bubble-bottom-bar');
       if (!text) return;
       navigator.clipboard.writeText(text).catch(function () {});
       // 切换为打勾图标，1.5s 后复原
@@ -508,14 +523,7 @@
       if (!rowEl) return;
       var ctx = getCurrentCtx();
 
-      // 通过 DOM 位置计算对应的 ctx.messages 索引
-      var rowCount = 0;
-      var walker = canvasEl.firstElementChild;
-      while (walker && walker !== rowEl) {
-        if (walker.classList.contains('row')) rowCount++;
-        walker = walker.nextElementSibling;
-      }
-      var userIdx = rowCount - 2; // 跳过欢迎语(row 0)和 AI 回复自身
+      var userIdx = getMessageIndexFromRow(rowEl) - 2; // 跳过欢迎语(row 0)和 AI 回复自身
       if (userIdx < 0 || userIdx >= ctx.messages.length || ctx.messages[userIdx].role !== 'user') return;
       var userMsg = ctx.messages[userIdx].content;
 
@@ -563,15 +571,7 @@
     copyBtn.title = '复制';
     copyBtn.innerHTML = COPY_SVG;
     copyBtn.addEventListener('click', function () {
-      var text = '';
-      for (var i = 0; i < bubbleEl.childNodes.length; i++) {
-        var n = bubbleEl.childNodes[i];
-        if (n.classList && n.classList.contains('user-bubble-bar')) continue;
-        if (n.nodeType === 3) { text += n.textContent; continue; }
-        if (n.tagName === 'BR') { text += '\n'; continue; }
-        if (n.textContent) text += n.textContent;
-      }
-      text = text.trim();
+      var text = getBubbleText(bubbleEl, 'user-bubble-bar');
       if (!text) return;
       navigator.clipboard.writeText(text).catch(function () {});
       copyBtn.innerHTML = CHECK_SVG;
@@ -632,13 +632,7 @@
         if (!newText) return;
         var ctx = getCurrentCtx();
 
-        var rowCount = 0;
-        var walker = canvasEl.firstElementChild;
-        while (walker && walker !== rowEl) {
-          if (walker.classList.contains('row')) rowCount++;
-          walker = walker.nextElementSibling;
-        }
-        var userIdx = rowCount - 1;
+        var userIdx = getMessageIndexFromRow(rowEl) - 1;
         if (userIdx < 0 || userIdx >= ctx.messages.length || ctx.messages[userIdx].role !== 'user') return;
 
         ctx.messages[userIdx].content = newText;
@@ -796,6 +790,42 @@
     inputEl.focus();
   }
 
+  // ============================================================
+  // 统一的流式 AI 请求（消除 P0 重复）
+  // ============================================================
+  function startStreaming(messages) {
+    var ctrl = createStreamBubble();
+    streaming = true;
+    disableInput();
+
+    var port = chrome.runtime.connect({ name: 'aiStream' });
+    var replyBuffer = '';
+
+    port.onMessage.addListener(function (msg) {
+      if (msg.type === 'thinking') {
+        ctrl.appendThinking(msg.content);
+      } else if (msg.type === 'token') {
+        ctrl.appendContent(msg.content);
+        replyBuffer += msg.content;
+      } else if (msg.type === 'done') {
+        ctrl.finalize(msg.time);
+        getCurrentCtx().messages.push({ role: 'assistant', content: replyBuffer });
+        saveCurrentCtx();
+        streaming = false;
+        enableInput();
+        port.disconnect();
+      } else if (msg.type === 'error') {
+        ctrl.finalize(0);
+        addSys('AI 回复失败: ' + msg.error, true);
+        streaming = false;
+        enableInput();
+        port.disconnect();
+      }
+    });
+
+    port.postMessage({ type: 'start', messages: messages });
+  }
+
   function askAI(userMsg, skipUserDisplay) {
     if (streaming) return;
     var ctx = getCurrentCtx();
@@ -820,38 +850,7 @@
         saveCurrentCtx();
       }
 
-      // 创建流式气泡
-      var ctrl = createStreamBubble();
-      streaming = true;
-      disableInput();
-
-      // 建立长连接
-      var port = chrome.runtime.connect({ name: 'aiStream' });
-      var replyBuffer = '';
-
-      port.onMessage.addListener(function (msg) {
-        if (msg.type === 'thinking') {
-          ctrl.appendThinking(msg.content);
-        } else if (msg.type === 'token') {
-          ctrl.appendContent(msg.content);
-          replyBuffer += msg.content;
-        } else if (msg.type === 'done') {
-          ctrl.finalize(msg.time);
-          ctx.messages.push({ role: 'assistant', content: replyBuffer });
-          saveCurrentCtx();
-          streaming = false;
-          enableInput();
-          port.disconnect();
-        } else if (msg.type === 'error') {
-          ctrl.finalize(0); // 显示时间
-          addSys('AI 回复失败: ' + msg.error, true);
-          streaming = false;
-          enableInput();
-          port.disconnect();
-        }
-      });
-
-      port.postMessage({ type: 'start', messages: messages });
+      startStreaming(messages);
     });
   }
 
@@ -913,165 +912,129 @@
     return url;
   }
 
+  // 等待岗位详情页加载并返回数据（Promise 化，消除 P1 嵌套）
+  function waitForJobDetail(jobUrl) {
+    return new Promise(function (resolve, reject) {
+      var timeoutId;
+      var detailListener = function (msg) {
+        if (msg.type === 'jobDetailReady') {
+          clearTimeout(timeoutId);
+          chrome.runtime.onMessage.removeListener(detailListener);
+          resolve(msg.data);
+        }
+      };
+      chrome.runtime.onMessage.addListener(detailListener);
+
+      timeoutId = setTimeout(function () {
+        chrome.runtime.onMessage.removeListener(detailListener);
+        reject(new Error('获取岗位详情超时（20s）'));
+      }, 20000);
+
+      chrome.runtime.sendMessage({ type: 'fetchJobDetail', url: jobUrl }, function (resp) {
+        if (resp && !resp.ok) {
+          clearTimeout(timeoutId);
+          chrome.runtime.onMessage.removeListener(detailListener);
+          reject(new Error(resp.error || '打开详情页失败'));
+        }
+      });
+    });
+  }
+
+  function buildJobInfoString(data) {
+    var info = [
+      '```',
+      '【岗位基本信息】',
+      '职位名称：' + (data.title || '未知'),
+      '薪资范围：' + (data.salary || '未知'),
+      '公司名称：' + (data.company || '未知'),
+      'Base属地：' + (data.city || '未知'),
+      '工作时间：' + (data.workSchedule || '未知'),
+      '学历要求：' + (data.education || '未知'),
+      '\n【公司基本信息】',
+      '融资阶段：' + (data.stage || '未知'),
+      '人员规模：' + (data.scale || '未知'),
+      '所属行业：' + (data.industry || '未知'),
+      '\n【岗位描述】',
+      (data.description || '无'),
+      '\n【公司介绍】',
+      (data.companyIntro || '无'),
+    ].join('\n');
+
+    if (data.bizInfo && data.bizInfo.length > 0) {
+      info += '\n\n【工商信息】\n' + data.bizInfo.join('\n') + '\n';
+    }
+    info += '\n【工作地址】\n' + (data.address || '未知') + '\n';
+
+    var extras = [];
+    if (data.skills && data.skills.length > 0) extras.push('技能要求：' + data.skills.join('、'));
+    if (data.welfare && data.welfare.length > 0) extras.push('福利待遇：' + data.welfare.join('、'));
+    if (extras.length > 0) info += '\n' + extras.join('\n') + '\n';
+
+    info += '```';
+    info += '\n了解完这个岗位信息后，只需回复：`我已经对该岗位有了全面理解。等待您的问题！`即可';
+    return info;
+  }
+
+  function getConfig() {
+    return new Promise(function (resolve) {
+      chrome.runtime.sendMessage({ type: 'getConfig' }, function (resp) {
+        resolve((resp && resp.ok && resp.config) || {});
+      });
+    });
+  }
+
   function fetchJobInfo() {
     if (streaming) return;
     var ctx = getCurrentCtx();
     addSys('正在注入脚本获取岗位标识...');
 
-    injectMainWorldHelper().then(function (mwData) {
-      var ids = extractJobIds(mwData);
-      var jobUrl = buildJobUrl(ids);
-
-      if (!jobUrl) {
-        addSys('⚠️ 未能提取到岗位 ID，无法获取岗位详情', true);
-        return;
-      }
-
-      addSys('✅ 已获取岗位标识，正在打开详情页...');
-
-      // 设置一次性监听器接收详情数据
-      var detailListener = function (msg) {
-        if (msg.type === 'jobDetailReady') {
-          clearTimeout(timeoutId);  // 取消超时
-          chrome.runtime.onMessage.removeListener(detailListener);
-
-          var data = msg.data;
-          if (!data || data.error || !data.title) {
-            addSys('⚠️ 获取岗位详情失败: ' + (data ? (data.error || '数据为空') : '未知错误'), true);
-            btnFetch.className = 'act-btn enabled';
-            btnFetch.disabled = false;
-            return;
-          }
-
-          // 构建岗位信息（匹配 job_detail_output.txt 风格，去掉 banner）
-          var jobInfo = [
-            '```',
-            '【岗位基本信息】',
-            '职位名称：' + (data.title || '未知'),
-            '薪资范围：' + (data.salary || '未知'),
-            '公司名称：' + (data.company || '未知'),
-            'Base属地：' + (data.city || '未知'),
-            '工作时间：' + (data.workSchedule || '未知'),
-            '学历要求：' + (data.education || '未知'),
-            '\n【公司基本信息】',
-            '融资阶段：' + (data.stage || '未知'),
-            '人员规模：' + (data.scale || '未知'),
-            '所属行业：' + (data.industry || '未知'),
-            '\n【岗位描述】',
-            (data.description || '无'),
-            '\n【公司介绍】',
-            (data.companyIntro || '无'),
-          ].join('\n');
-
-          // 工商信息
-          if (data.bizInfo && data.bizInfo.length > 0) {
-            jobInfo += '\n\n【工商信息】\n' + data.bizInfo.join('\n') + '\n';
-          }
-
-          jobInfo += '\n【工作地址】\n' + (data.address || '未知') + '\n';
-
-          // 标签信息
-          var extras = [];
-          if (data.skills && data.skills.length > 0) extras.push('技能要求：' + data.skills.join('、'));
-          if (data.welfare && data.welfare.length > 0) extras.push('福利待遇：' + data.welfare.join('、'));
-          if (extras.length > 0) {
-            jobInfo += '\n' + extras.join('\n') + '\n';
-          }
-
-          jobInfo += '```';
-          jobInfo += '\n了解完这个岗位信息后，只需回复：`我已经对该岗位有了全面理解。等待您的问题！`即可';
-
-          // 获取用户的系统提示词配置
-          chrome.runtime.sendMessage({ type: 'getConfig' }, function (resp) {
-            var basePrompt = (resp && resp.ok && resp.config.systemPrompt) || '你是一个面试助手，帮助用户分析岗位要求、优化沟通策略。回答简洁专业，使用中文。';
-
-            // 构建 system prompt
-            ctx.systemPrompt = [
-              basePrompt,
-              '',
-              '以下是与当前对话的完整岗位信息：',
-              '',
-              jobInfo,
-              '',
-              '请基于以上信息为用户提供建议。注意：用户可能也会问你与岗位相关的问题。保持对话自然。',
-            ].join('\n');
-
-            ctx.jobFetched = true;
-            ctx.messages = [];
-
-            // 以用户身份自动发送岗位信息
-            addMsg('user', jobInfo);
-            ctx.messages.push({ role: 'user', content: jobInfo });
-            saveCurrentCtx();
-
-            // 调用 AI
-            var messages = [
-              { role: 'system', content: ctx.systemPrompt },
-              { role: 'user', content: jobInfo },
-            ];
-
-            var ctrl = createStreamBubble();
-            streaming = true;
-            disableInput();
-
-            var port = chrome.runtime.connect({ name: 'aiStream' });
-            var replyBuffer = '';
-
-            port.onMessage.addListener(function (msg) {
-              if (msg.type === 'thinking') {
-                ctrl.appendThinking(msg.content);
-              } else if (msg.type === 'token') {
-                ctrl.appendContent(msg.content);
-                replyBuffer += msg.content;
-              } else if (msg.type === 'done') {
-                ctrl.finalize(msg.time);
-                ctx.messages.push({ role: 'assistant', content: replyBuffer });
-                saveCurrentCtx();
-                streaming = false;
-                enableInput();
-                port.disconnect();
-              } else if (msg.type === 'error') {
-                ctrl.finalize(0);
-                addSys('AI 回复失败: ' + msg.error, true);
-                streaming = false;
-                enableInput();
-                port.disconnect();
-              }
-            });
-
-            port.postMessage({ type: 'start', messages: messages });
-
-            btnFetch.className = 'act-btn disabled';
-            btnFetch.disabled = true;
-            btnFetch.innerHTML = '发送岗位信息 <span class="badge">✅</span>';
-            addSys('岗位信息已获取，可继续对话');
-          });
+    injectMainWorldHelper()
+      .then(function (mwData) {
+        var ids = extractJobIds(mwData);
+        var jobUrl = buildJobUrl(ids);
+        if (!jobUrl) throw new Error('未能提取到岗位 ID，无法获取岗位详情');
+        addSys('✅ 已获取岗位标识，正在打开详情页...');
+        return waitForJobDetail(jobUrl);
+      })
+      .then(function (data) {
+        if (!data || data.error || !data.title) {
+          throw new Error(data ? (data.error || '数据为空') : '未知错误');
         }
-      };
-      chrome.runtime.onMessage.addListener(detailListener);
+        var jobInfo = buildJobInfoString(data);
+        return getConfig().then(function (cfg) {
+          var basePrompt = cfg.systemPrompt || '你是一个面试助手，帮助用户分析岗位要求、优化沟通策略。回答简洁专业，使用中文。';
+          ctx.systemPrompt = [
+            basePrompt,
+            '',
+            '以下是与当前对话的完整岗位信息：',
+            '',
+            jobInfo,
+            '',
+            '请基于以上信息为用户提供建议。注意：用户可能也会问你与岗位相关的问题。保持对话自然。',
+          ].join('\n');
+          ctx.jobFetched = true;
+          ctx.messages = [];
 
-      // 超时清理
-      var timeoutId = setTimeout(function () {
-        chrome.runtime.onMessage.removeListener(detailListener);
-        addSys('⚠️ 获取岗位详情超时（20s）', true);
+          addMsg('user', jobInfo);
+          ctx.messages.push({ role: 'user', content: jobInfo });
+          saveCurrentCtx();
+
+          startStreaming([
+            { role: 'system', content: ctx.systemPrompt },
+            { role: 'user', content: jobInfo },
+          ]);
+
+          btnFetch.className = 'act-btn disabled';
+          btnFetch.disabled = true;
+          btnFetch.innerHTML = '发送岗位信息 <span class="badge">✅</span>';
+          addSys('岗位信息已获取，可继续对话');
+        });
+      })
+      .catch(function (err) {
+        addSys('⚠️ ' + err.message, true);
         btnFetch.className = 'act-btn enabled';
         btnFetch.disabled = false;
-      }, 20000);
-
-      // 发送请求给 background 打开隐藏标签页
-      chrome.runtime.sendMessage({ type: 'fetchJobDetail', url: jobUrl }, function (resp) {
-        if (resp && !resp.ok) {
-          clearTimeout(timeoutId);
-          chrome.runtime.onMessage.removeListener(detailListener);
-          addSys('⚠️ 打开详情页失败: ' + (resp.error || '未知错误'), true);
-          btnFetch.className = 'act-btn enabled';
-          btnFetch.disabled = false;
-        }
       });
-
-    }).catch(function (err) {
-      addSys('⚠️ 脚本注入失败: ' + err.message, true);
-    });
   }
 
   // ============================================================
