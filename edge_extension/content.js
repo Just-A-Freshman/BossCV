@@ -620,6 +620,9 @@
         rowEl.classList.remove('editing');
         bubbleEl.innerHTML = escHtml(originalText);
         addUserBubbleActions(bubbleEl);
+        var cr = canvasEl.getBoundingClientRect();
+        var rr = rowEl.getBoundingClientRect();
+        canvasEl.scrollTop += (rr.bottom - cr.bottom);
       });
 
       sendBtn.addEventListener('click', function () {
