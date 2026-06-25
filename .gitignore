@@ -1,6 +1,10 @@
 node_modules/
 tests/
 projects/
+crawler/
+data_processing/
+debug/
+image/
 */data/config.json
 */data/jobs.json
 */data/progress.json
