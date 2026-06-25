@@ -346,7 +346,7 @@
     '            </div>',
     '          </div>',
     '          <button class="act-btn enabled" id="btnFetch">发送岗位信息</button>',
-    '          <button class="act-btn enabled" id="btnResume">定制简历</button>',
+    '          <button class="act-btn enabled" id="btnResume">编辑简历</button>',
     '          <button class="send" id="sendBtn">↑</button>',
     '        </div>',
     '      </div>',
@@ -1048,7 +1048,7 @@
   });
 
   btnResume.addEventListener('click', function () {
-    addSys('简历定制功能开发中...');
+    chrome.runtime.sendMessage({ type: 'openResumePage' });
   });
 
   function handleSend() {

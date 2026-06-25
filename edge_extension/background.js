@@ -152,7 +152,7 @@
   });
 
   // ============================================================
-  // 短消息（非流式：getConfig / fetchJobDetail / openPhrasesPage）
+  // 短消息（非流式：getConfig / fetchJobDetail / openPhrasesPage / openResumePage）
   // ============================================================
   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (msg.type === 'getConfig') {
@@ -162,6 +162,12 @@
 
     if (msg.type === 'openPhrasesPage') {
       chrome.tabs.create({ url: chrome.runtime.getURL('phrases.html') });
+      sendResponse({ ok: true });
+      return true;
+    }
+
+    if (msg.type === 'openResumePage') {
+      chrome.tabs.create({ url: chrome.runtime.getURL('resume.html') });
       sendResponse({ ok: true });
       return true;
     }
