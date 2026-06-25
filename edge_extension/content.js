@@ -590,7 +590,9 @@
     editBtn.addEventListener('click', function () {
       if (streaming) return;
       var rowEl = bubbleEl.closest('.row');
-      var originalText = bubbleEl.textContent.replace(/\s*$/, '');
+      var userIdx = getMessageIndexFromRow(rowEl) - 1;
+      var ctx = getCurrentCtx();
+      var originalText = (ctx.messages[userIdx]?.content || '').replace(/\s*$/, '');
 
       rowEl.classList.add('editing');
       bubbleEl.innerHTML = '';
