@@ -484,6 +484,42 @@
     regenBtn.className = 'bubble-btn';
     regenBtn.title = '重新生成';
     regenBtn.innerHTML = REGEN_SVG;
+    regenBtn.addEventListener('click', function () {
+      if (streaming) return;
+      var rowEl = bubbleEl.closest('.row');
+      if (!rowEl) return;
+      var ctx = getCurrentCtx();
+
+      // 通过 DOM 位置计算对应的 ctx.messages 索引
+      var rowCount = 0;
+      var walker = canvasEl.firstElementChild;
+      while (walker && walker !== rowEl) {
+        if (walker.classList.contains('row')) rowCount++;
+        walker = walker.nextElementSibling;
+      }
+      var userIdx = rowCount - 2; // 跳过欢迎语(row 0)和 AI 回复自身
+      if (userIdx < 0 || userIdx >= ctx.messages.length || ctx.messages[userIdx].role !== 'user') return;
+      var userMsg = ctx.messages[userIdx].content;
+
+      // 从 DOM 删除：上一条用户消息、本 AI 回复及之后所有元素
+      var prevRow = rowEl.previousElementSibling;
+      while (prevRow && !prevRow.classList.contains('row')) {
+        prevRow = prevRow.previousElementSibling;
+      }
+      var after = [];
+      var n = rowEl.nextElementSibling;
+      while (n) { after.push(n); n = n.nextElementSibling; }
+      [prevRow, rowEl].concat(after).forEach(function (el) {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      });
+
+      // 截断消息历史：删除用户消息及其后所有内容
+      ctx.messages.splice(userIdx);
+      saveCurrentCtx();
+
+      // 重新生成（askAI 会重新展示用户消息）
+      askAI(userMsg);
+    });
     actions.appendChild(regenBtn);
 
     bar.appendChild(actions);
@@ -635,7 +671,7 @@
     inputEl.focus();
   }
 
-  function askAI(userMsg) {
+  function askAI(userMsg, skipUserDisplay) {
     if (streaming) return;
     var ctx = getCurrentCtx();
 
@@ -653,10 +689,11 @@
 
       messages.push({ role: 'user', content: userMsg });
 
-      // 显示用户消息
-      addMsg('user', userMsg);
-      ctx.messages.push({ role: 'user', content: userMsg });
-      saveCurrentCtx();
+      if (!skipUserDisplay) {
+        addMsg('user', userMsg);
+        ctx.messages.push({ role: 'user', content: userMsg });
+        saveCurrentCtx();
+      }
 
       // 创建流式气泡
       var ctrl = createStreamBubble();
