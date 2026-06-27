@@ -25,9 +25,7 @@
   // 流式 AI 对话
   // ============================================================
   async function callAIStream(messages, port) {
-    var cfg;
-    try { cfg = await getConfig(); }
-    catch (e) { port.postMessage({ type: 'error', error: '读取配置失败' }); return; }
+    var cfg = await getConfig();
 
     if (!cfg.apiKey) {
       port.postMessage({ type: 'error', error: '未配置 API Key' });
@@ -108,26 +106,9 @@
 
         // 普通 content
         if (delta.content) {
-          // 如果之前是 reasoning 阶段，标记切换
-          if (isReasoning) {
-            // reasoning_content 可能在 content 出现之前就结束了（最后一个 thinking chunk 的 content='' 但不是 null）
-            // 但更深层模型可能在 content 出现同时还在发 reasoning
-            // 我们只在 content 非空时切换标记
-          }
           isReasoning = false;
           fullContent += delta.content;
           port.postMessage({ type: 'token', content: delta.content });
-        } else if (delta.reasoning_content === null && delta.content === '' && !finish) {
-          // DeepSeek 在切换阶段可能会发一个空 content chunk 标记角色
-          // 忽略 role 标记
-        }
-
-        if (finish) {
-          var elapsed = Date.now() - startTime;
-          port.postMessage({
-            type: 'done',
-            time: elapsed,
-          });
         }
       }
     }

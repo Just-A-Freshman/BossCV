@@ -31,7 +31,8 @@
   // ===== 字段绑定 =====
   function setField(path, value) {
     var el = document.querySelector('[data-path="' + path + '"]');
-    if (el) el.value = value || '';
+    if (!el) return;
+    el.value = value || '';
   }
 
   function getField(path) {
@@ -43,8 +44,6 @@
   var FIELD_PATHS = [
     'basic.name', 'basic.birthDate', 'basic.gender', 'basic.workYears',
     'basic.jobIntention', 'basic.phone', 'basic.email', 'basic.politicalStatus', 'basic.custom',
-    'education.school', 'education.major', 'education.degree', 'education.period',
-    'education.courses', 'education.custom',
     'honors', 'selfEvaluation',
   ];
 
@@ -72,24 +71,41 @@
     return result;
   }
 
-  // ===== 专业技能（纯文本数组） =====
+  // ===== 专业技能（名称 + 描述） =====
   var skillsList = document.getElementById('skillsList');
 
-  function createSkillItem(value) {
+  function createSkillItem(data) {
     var div = document.createElement('div');
-    div.className = 'dyn-item';
+    div.className = 'extra-entry';
+
+    var header = document.createElement('div');
+    header.className = 'extra-header';
+
+    var label = document.createElement('span');
+    label.className = 'field-label';
+    label.textContent = '技能名称';
+    header.appendChild(label);
+
+    var title = document.createElement('input');
+    title.className = 'extra-title';
+    title.placeholder = '输入技能名称...';
+    title.value = (data && data.name) || '';
+    header.appendChild(title);
+
+    var delBtn = document.createElement('button');
+    delBtn.className = 'dyn-del';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', function () { div.remove(); });
+    header.appendChild(delBtn);
+
+    div.appendChild(header);
 
     var ta = document.createElement('textarea');
     ta.className = 'field-textarea';
-    ta.value = value || '';
-    ta.placeholder = '描述一项专业技能...';
+    ta.placeholder = '描述该项技能...';
+    // 兼容旧数据：旧格式是纯字符串，新格式是 {name, content}
+    ta.value = (data && data.content) || (typeof data === 'string' ? data : '');
     div.appendChild(ta);
-
-    var btn = document.createElement('button');
-    btn.className = 'dyn-del';
-    btn.textContent = '✕';
-    btn.addEventListener('click', function () { div.remove(); });
-    div.appendChild(btn);
 
     return div;
   }
@@ -97,17 +113,18 @@
   function renderSkills(items) {
     skillsList.innerHTML = '';
     if (!items || items.length === 0) {
-      skillsList.appendChild(createSkillItem(''));
+      skillsList.appendChild(createSkillItem(null));
       return;
     }
-    items.forEach(function (t) { skillsList.appendChild(createSkillItem(t)); });
+    items.forEach(function (item) { skillsList.appendChild(createSkillItem(item)); });
   }
 
   function collectSkills() {
     var items = [];
-    skillsList.querySelectorAll('.dyn-item textarea').forEach(function (ta) {
-      var v = ta.value.trim();
-      if (v) items.push(v);
+    skillsList.querySelectorAll('.extra-entry').forEach(function (entry) {
+      var name = entry.querySelector('.extra-title').value.trim();
+      var content = entry.querySelector('.field-textarea').value.trim();
+      if (name || content) items.push({ name: name, content: content });
     });
     return items;
   }
@@ -175,6 +192,18 @@
 
   // ===== 复合条目（工作/实习/项目） =====
   var ENTRY_CONFIG = {
+    education: {
+      container: document.getElementById('educationList'),
+      addBtn: document.getElementById('educationAdd'),
+      rowClass: 'field-row-4',
+      fields: [
+        { key: 'school', label: '学校名称' },
+        { key: 'major',  label: '专业' },
+        { key: 'degree', label: '学历', placeholder: '本科/硕士/博士' },
+        { key: 'period', label: '在校时间', placeholder: '2016.09 - 2020.06' },
+      ],
+      contentField: { key: 'courses', label: '相关课程' },
+    },
     work: {
       container: document.getElementById('workList'),
       addBtn: document.getElementById('workAdd'),
@@ -218,7 +247,7 @@
     card.appendChild(delBtn);
 
     var row = document.createElement('div');
-    row.className = 'field-row field-row-3';
+    row.className = 'field-row ' + (cfg.rowClass || 'field-row-3');
     cfg.fields.forEach(function (f) {
       var g = document.createElement('div');
       g.className = 'field-group';
@@ -295,6 +324,12 @@
       var data = result[RESUME_KEY] || {};
       populateStaticFields(data);
       renderSkills(data.skills);
+
+      // 教育经历兼容：旧格式是对象（单条），新格式是数组（多条）
+      var edu = data.education;
+      if (edu && !Array.isArray(edu)) edu = [edu];
+      renderEntries(ENTRY_CONFIG.education, edu);
+
       renderEntries(ENTRY_CONFIG.work, data.workExperience);
       renderEntries(ENTRY_CONFIG.internship, data.internship);
       renderEntries(ENTRY_CONFIG.project, data.projects);
@@ -305,6 +340,7 @@
   function saveResume(silent) {
     var data = collectStaticFields();
     data.skills = collectSkills();
+    data.education = collectEntries(ENTRY_CONFIG.education);
     data.workExperience = collectEntries(ENTRY_CONFIG.work);
     data.internship = collectEntries(ENTRY_CONFIG.internship);
     data.projects = collectEntries(ENTRY_CONFIG.project);
@@ -335,18 +371,31 @@
       addLine(lines, '政治面貌', data.basic.politicalStatus);
     }
 
-    lines.push('\n【教育背景】');
-    if (data.education) {
-      addLine(lines, '学校名称', data.education.school);
-      addLine(lines, '专业', data.education.major);
-      addLine(lines, '学历', data.education.degree);
-      addLine(lines, '在校时间', data.education.period);
-      addLine(lines, '相关课程', data.education.courses);
+    if (data.education && data.education.length > 0) {
+      lines.push('\n【教育背景】');
+      data.education.forEach(function (e) {
+        var header = e.school || '教育经历';
+        if (e.major) header += '（' + e.major + '）';
+        lines.push('--- ' + header + ' ---');
+        addLine(lines, '学校名称', e.school);
+        addLine(lines, '专业', e.major);
+        addLine(lines, '学历', e.degree);
+        addLine(lines, '在校时间', e.period);
+        addLine(lines, '相关课程', e.courses);
+      });
     }
 
     if (data.skills && data.skills.length > 0) {
       lines.push('\n【专业技能】');
-      data.skills.forEach(function (s) { lines.push(s); });
+      data.skills.forEach(function (s) {
+        if (typeof s === 'string') {
+          lines.push(s);
+        } else {
+          var header = s.name || '技能';
+          lines.push('--- ' + header + ' ---');
+          if (s.content) lines.push(stripHtml(s.content));
+        }
+      });
     }
 
     if (data.workExperience && data.workExperience.length > 0) {
@@ -382,13 +431,13 @@
       });
     }
 
-    if (data.honors) lines.push('\n【荣誉证书】\n' + data.honors);
-    if (data.selfEvaluation) lines.push('\n【自我评价】\n' + data.selfEvaluation);
+    if (data.honors) lines.push('\n【荣誉证书】\n' + stripHtml(data.honors));
+    if (data.selfEvaluation) lines.push('\n【自我评价】\n' + stripHtml(data.selfEvaluation));
     if (data.extraModules && data.extraModules.length > 0) {
       data.extraModules.forEach(function (m) {
         var title = m.name || '添加模块';
         lines.push('\n【' + title + '】');
-        if (m.content) lines.push(m.content);
+        if (m.content) lines.push(stripHtml(m.content));
       });
     }
 
@@ -396,7 +445,14 @@
   }
 
   function addLine(lines, label, value) {
-    if (value) lines.push(label + '：' + value);
+    if (value) lines.push(label + '：' + stripHtml(value));
+  }
+
+  function stripHtml(html) {
+    if (!html) return '';
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
   }
 
   function exportResume() {

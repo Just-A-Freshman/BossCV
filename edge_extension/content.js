@@ -144,7 +144,7 @@
   var savedRightBottomZ = null;
 
   function setPanelVisible(visible) {
-    if (visible === panelActive || !host) return;
+    if (visible === panelActive) return;
     panelActive = visible;
     host.style.display = visible ? '' : 'none';
 
@@ -865,10 +865,6 @@
     });
   }
 
-  // ============================================================
-  // 7. 获取岗位信息（提取 ID → 隐藏标签页 → 详情 → AI）
-  // ============================================================
-
   // 注入 main-world 辅助脚本（通过 web_accessible_resources 绕过 CSP）
   function injectMainWorldHelper() {
     return new Promise(function (resolve, reject) {
@@ -909,10 +905,12 @@
   function extractJobIds(mwData) {
     var ids = { encryptJobId: null, securityId: null };
     if (!mwData || !mwData.rawIds) return ids;
-    mwData.rawIds.forEach(function (item) {
-      if (!ids.encryptJobId && item.key === 'encryptJobId') ids.encryptJobId = item.value;
-      if (!ids.securityId && item.key === 'securityId') ids.securityId = item.value;
-    });
+    for (var k = 0; k < mwData.rawIds.length; k++) {
+      var item = mwData.rawIds[k];
+      if (item.key === 'encryptJobId') ids.encryptJobId = item.value;
+      else if (item.key === 'securityId') ids.securityId = item.value;
+      if (ids.encryptJobId && ids.securityId) break;
+    }
     return ids;
   }
 
@@ -1095,11 +1093,8 @@
 
   // 页面点击：点击在面板外时关闭（事件从 Shadow DOM 穿出时 target 被重定向为 host）
   document.addEventListener('click', function (e) {
-    if (phrasesPopup.classList.contains('open')) {
-      var host = document.getElementById('boss-ai-host');
-      if (host && !host.contains(e.target)) {
-        closePhrasesPopup();
-      }
+    if (phrasesPopup.classList.contains('open') && host && !host.contains(e.target)) {
+      closePhrasesPopup();
     }
   });
 

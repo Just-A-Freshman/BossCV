@@ -129,11 +129,7 @@
           if (state) stores.push(state);
         }
       } catch (e) {}
-      try {
-        if (all[i].__vue_app__ && all[i].__vue_app__.config) {
-          // Vue 3: try to get store from app
-        }
-      } catch (e) {}
+      // Vue 3 store not supported
     }
     return stores;
   }
