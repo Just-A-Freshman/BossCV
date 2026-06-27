@@ -489,8 +489,8 @@
       showToast('功能开发中...');
     });
 
-    // 自动保存（每 3s）
-    setInterval(function () { saveResume(true); }, 3000);
+    // 关闭/刷新页面时保存
+    window.addEventListener('beforeunload', function () { saveResume(true); });
 
     window.addEventListener('scroll', updateActiveTOC);
     updateActiveTOC();
