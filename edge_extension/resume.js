@@ -202,7 +202,7 @@
         { key: 'degree', label: '学历', placeholder: '本科/硕士/博士' },
         { key: 'period', label: '在校时间', placeholder: '2016.09 - 2020.06' },
       ],
-      contentField: { key: 'courses', label: '相关课程' },
+      contentField: { key: 'courses', label: '相关信息' },
     },
     work: {
       container: document.getElementById('workList'),
@@ -381,7 +381,7 @@
         addLine(lines, '专业', e.major);
         addLine(lines, '学历', e.degree);
         addLine(lines, '在校时间', e.period);
-        addLine(lines, '相关课程', e.courses);
+        addLine(lines, '相关信息', e.courses);
       });
     }
 
