@@ -1,20 +1,8 @@
-node_modules/
-tests/
-projects/
-crawler/
-data_processing/
-debug/
-image/
-*/data/config.json
-*/data/jobs.json
-*/data/progress.json
-explore*
-
-.github/
-docs/
+*/
+!edge_extension/
+!chrome_extension/
+!firefox_extension/
 
 playwright.config.ts
 CLAUDE.md
-.claude/
 
-/debug-*
