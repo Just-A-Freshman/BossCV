@@ -343,6 +343,74 @@
 
     .section-anchor { scroll-margin-top: 20px; }
 
+    /* ===== 多版本管理器 ===== */
+    .version-manager {
+      margin-top: 12px;
+      border: 1px solid var(--border-card);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .version-tab-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 10px;
+      background: var(--bg-page);
+      border-bottom: 1px solid var(--border-card);
+      flex-wrap: wrap;
+    }
+    .version-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      background: #fff;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-input);
+      transition: all .15s;
+      user-select: none;
+    }
+    .version-pill:hover { border-color: var(--primary); color: var(--primary); }
+    .version-pill.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .vp-label {
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .vp-label[contenteditable] { outline: none; min-width: 24px; }
+    .vp-label[contenteditable]:focus { border-bottom: 1px dotted currentColor; }
+    .vp-del {
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      color: inherit;
+      opacity: 0.6;
+      padding: 0 2px;
+    }
+    .vp-del:hover { opacity: 1 !important; }
+    .version-add {
+      background: none;
+      border: 1px dashed var(--border-input);
+      color: var(--text-placeholder);
+      padding: 4px 10px;
+      font-size: 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .15s;
+    }
+    .version-add:hover { border-color: var(--primary); color: var(--primary); }
+    .version-items { padding: 12px; }
+    .version-item.hidden { display: none !important; }
+
     @media (max-width: 640px) {
       .sidebar { display: none; }
       .content { margin-left: 0; padding: 20px 16px 60px; }

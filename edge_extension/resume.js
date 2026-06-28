@@ -213,6 +213,7 @@
         { key: 'period',   label: '工作时间', placeholder: '2020.07 - 2022.08' },
       ],
       contentField: { key: 'content', label: '工作内容' },
+      supportsVersions: true,
     },
     internship: {
       container: document.getElementById('internshipList'),
@@ -223,6 +224,7 @@
         { key: 'period',   label: '实习时间', placeholder: '2023.06 - 2023.12' },
       ],
       contentField: { key: 'content', label: '实际内容' },
+      supportsVersions: true,
     },
     project: {
       container: document.getElementById('projectsList'),
@@ -233,6 +235,7 @@
         { key: 'period', label: '项目时间', placeholder: '2023.01 - 2023.06' },
       ],
       contentField: { key: 'description', label: '项目描述' },
+      supportsVersions: true,
     },
   };
 
@@ -269,29 +272,164 @@
     card.appendChild(row);
 
     if (cfg.contentField) {
-      var cf = cfg.contentField;
-      var cr = document.createElement('div');
-      cr.className = 'field-row';
+      if (cfg.supportsVersions) {
+        card.appendChild(createVersionManager(cfg, data));
+      } else {
+        var cf = cfg.contentField;
+        var cr = document.createElement('div');
+        cr.className = 'field-row';
 
-      var cg = document.createElement('div');
-      cg.className = 'field-group full';
+        var cg = document.createElement('div');
+        cg.className = 'field-group full';
 
-      var cl = document.createElement('label');
-      cl.className = 'field-label';
-      cl.textContent = cf.label;
-      cg.appendChild(cl);
+        var cl = document.createElement('label');
+        cl.className = 'field-label';
+        cl.textContent = cf.label;
+        cg.appendChild(cl);
 
-      var ta = document.createElement('textarea');
-      ta.className = 'field-textarea';
-      ta.dataset.key = cf.key;
-      ta.value = (data && data[cf.key]) || '';
-      cg.appendChild(ta);
+        var ta = document.createElement('textarea');
+        ta.className = 'field-textarea';
+        ta.dataset.key = cf.key;
+        ta.value = (data && data[cf.key]) || '';
+        cg.appendChild(ta);
 
-      cr.appendChild(cg);
-      card.appendChild(cr);
+        cr.appendChild(cg);
+        card.appendChild(cr);
+      }
     }
 
     return card;
+  }
+
+  // ===== 多版本管理器 =====
+  function createVersionManager(cfg, data) {
+    var cf = cfg.contentField;
+
+    // 向后兼容：旧数据只有 content 没有 versions
+    var versions = (data && data.versions) || [];
+    if (versions.length === 0 && data && data[cf.key]) {
+      versions = [{ label: '默认版本', content: data[cf.key] }];
+    }
+    if (versions.length === 0) {
+      versions = [{ label: '默认版本', content: '' }];
+    }
+
+    var currentIdx = 0;
+
+    var container = document.createElement('div');
+    container.className = 'version-manager';
+
+    var tabBar = document.createElement('div');
+    tabBar.className = 'version-tab-bar';
+
+    var itemsContainer = document.createElement('div');
+    itemsContainer.className = 'version-items';
+
+    function render() {
+      tabBar.innerHTML = '';
+      itemsContainer.innerHTML = '';
+
+      versions.forEach(function (v, i) {
+        // ---- Tab pill ----
+        var pill = document.createElement('span');
+        pill.className = 'version-pill' + (i === currentIdx ? ' active' : '');
+
+        var labelSpan = document.createElement('span');
+        labelSpan.className = 'vp-label';
+        labelSpan.textContent = v.label || ('版本 ' + (i + 1));
+        labelSpan.contentEditable = true;
+        labelSpan.addEventListener('blur', function () {
+          v.label = labelSpan.textContent.trim() || ('版本 ' + (i + 1));
+        });
+        labelSpan.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); labelSpan.blur(); }
+        });
+        pill.appendChild(labelSpan);
+
+        if (versions.length > 1) {
+          var del = document.createElement('span');
+          del.className = 'vp-del';
+          del.textContent = '×';
+          del.addEventListener('click', function (e) {
+            e.stopPropagation();
+            versions.splice(i, 1);
+            if (currentIdx >= versions.length) currentIdx = versions.length - 1;
+            render();
+          });
+          pill.appendChild(del);
+        }
+
+        pill.addEventListener('click', function () {
+          if (i === currentIdx) return;
+          currentIdx = i;
+          render();
+        });
+
+        tabBar.appendChild(pill);
+
+        // ---- Version item (content area) ----
+        var item = document.createElement('div');
+        item.className = 'version-item' + (i !== currentIdx ? ' hidden' : '');
+
+        var labelRow = document.createElement('div');
+        labelRow.className = 'field-row';
+        var labelG = document.createElement('div');
+        labelG.className = 'field-group';
+        var labelL = document.createElement('label');
+        labelL.className = 'field-label';
+        labelL.textContent = '版本标签';
+        labelG.appendChild(labelL);
+        var labelI = document.createElement('input');
+        labelI.className = 'field-input version-label';
+        labelI.value = v.label || '';
+        labelI.placeholder = '如：架构方向、管理方向';
+        labelI.addEventListener('input', function () {
+          v.label = labelI.value;
+          var tabLabels = tabBar.querySelectorAll('.vp-label');
+          if (tabLabels[i]) tabLabels[i].textContent = v.label || ('版本 ' + (i + 1));
+        });
+        labelG.appendChild(labelI);
+        labelRow.appendChild(labelG);
+        item.appendChild(labelRow);
+
+        var contentRow = document.createElement('div');
+        contentRow.className = 'field-row';
+        var contentG = document.createElement('div');
+        contentG.className = 'field-group full';
+        var contentL = document.createElement('label');
+        contentL.className = 'field-label';
+        contentL.textContent = cf.label;
+        contentG.appendChild(contentL);
+        var contentTA = document.createElement('textarea');
+        contentTA.className = 'field-textarea version-content';
+        contentTA.value = v.content || '';
+        contentTA.placeholder = '描述此版本内容...';
+        contentTA.addEventListener('input', function () {
+          v.content = contentTA.value;
+        });
+        contentG.appendChild(contentTA);
+        contentRow.appendChild(contentG);
+        item.appendChild(contentRow);
+
+        itemsContainer.appendChild(item);
+      });
+
+      // ---- Add version button ----
+      var addBtn = document.createElement('button');
+      addBtn.className = 'version-add';
+      addBtn.textContent = '+ 添加版本';
+      addBtn.addEventListener('click', function () {
+        versions.push({ label: '', content: '' });
+        currentIdx = versions.length - 1;
+        render();
+      });
+      tabBar.appendChild(addBtn);
+    }
+
+    render();
+    container.appendChild(tabBar);
+    container.appendChild(itemsContainer);
+    return container;
   }
 
   function renderEntries(cfg, items) {
@@ -306,6 +444,23 @@
       card.querySelectorAll('[data-key]').forEach(function (el) {
         entry[el.dataset.key] = el.value.trim();
       });
+
+      // 收集多版本数据
+      if (cfg.supportsVersions) {
+        var versionItems = card.querySelectorAll('.version-item');
+        var versions = [];
+        versionItems.forEach(function (item) {
+          var label = item.querySelector('.version-label').value.trim();
+          var content = item.querySelector('.version-content').value.trim();
+          if (label || content) versions.push({ label: label, content: content });
+        });
+        if (versions.length > 0) {
+          entry.versions = versions;
+          // 首版本内容兼容旧字段
+          entry[cfg.contentField.key] = versions[0].content;
+        }
+      }
+
       if (entry[cfg.fields[0].key]) items.push(entry);
     });
     return items;
@@ -405,7 +560,14 @@
         if (w.position) header += '（' + w.position + '）';
         lines.push('--- ' + header + ' ---');
         addLine(lines, '工作时间', w.period);
-        addLine(lines, '工作内容', w.content);
+        if (w.versions && w.versions.length > 0) {
+          w.versions.forEach(function (v) {
+            if (v.label) lines.push('[' + v.label + ']');
+            if (v.content) lines.push(stripHtml(v.content));
+          });
+        } else if (w.content) {
+          addLine(lines, '工作内容', w.content);
+        }
       });
     }
 
@@ -416,7 +578,14 @@
         if (w.position) header += '（' + w.position + '）';
         lines.push('--- ' + header + ' ---');
         addLine(lines, '实习时间', w.period);
-        addLine(lines, '实际内容', w.content);
+        if (w.versions && w.versions.length > 0) {
+          w.versions.forEach(function (v) {
+            if (v.label) lines.push('[' + v.label + ']');
+            if (v.content) lines.push(stripHtml(v.content));
+          });
+        } else if (w.content) {
+          addLine(lines, '实际内容', w.content);
+        }
       });
     }
 
@@ -427,7 +596,14 @@
         if (p.role) header += '（' + p.role + '）';
         lines.push('--- ' + header + ' ---');
         addLine(lines, '项目时间', p.period);
-        addLine(lines, '项目描述', p.description);
+        if (p.versions && p.versions.length > 0) {
+          p.versions.forEach(function (v) {
+            if (v.label) lines.push('[' + v.label + ']');
+            if (v.content) lines.push(stripHtml(v.content));
+          });
+        } else if (p.description) {
+          addLine(lines, '项目描述', p.description);
+        }
       });
     }
 
